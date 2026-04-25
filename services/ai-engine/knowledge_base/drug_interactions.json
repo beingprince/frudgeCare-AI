@@ -1,0 +1,182 @@
+[
+  {
+    "drug_a": "lisinopril",
+    "drug_a_aliases": ["ace inhibitor", "enalapril", "ramipril", "benazepril", "captopril"],
+    "drug_b": "ibuprofen",
+    "drug_b_aliases": ["nsaid", "naproxen", "aspirin high dose", "ketorolac", "diclofenac"],
+    "severity": "high",
+    "mechanism": "ACE inhibitors combined with NSAIDs increase risk of acute kidney injury, hyperkalemia, and reduced antihypertensive effect.",
+    "recommendation": "Avoid routine combination. Prefer acetaminophen for pain. If NSAID needed short-term, monitor BP, creatinine, potassium."
+  },
+  {
+    "drug_a": "warfarin",
+    "drug_a_aliases": ["coumadin", "jantoven"],
+    "drug_b": "ibuprofen",
+    "drug_b_aliases": ["nsaid", "naproxen", "aspirin", "ketorolac", "diclofenac"],
+    "severity": "high",
+    "mechanism": "NSAIDs increase bleeding risk via antiplatelet effect and potential GI erosion; some NSAIDs also displace warfarin from protein binding.",
+    "recommendation": "Avoid if possible. Prefer acetaminophen. If unavoidable, use lowest dose + GI protection and monitor INR."
+  },
+  {
+    "drug_a": "warfarin",
+    "drug_a_aliases": ["coumadin"],
+    "drug_b": "amiodarone",
+    "drug_b_aliases": [],
+    "severity": "high",
+    "mechanism": "Amiodarone inhibits CYP2C9 and P-glycoprotein, significantly increasing warfarin levels and bleeding risk.",
+    "recommendation": "Reduce warfarin by 30-50% when starting amiodarone; recheck INR in 3-5 days."
+  },
+  {
+    "drug_a": "metformin",
+    "drug_a_aliases": ["glucophage"],
+    "drug_b": "iodinated contrast",
+    "drug_b_aliases": ["contrast dye", "iv contrast"],
+    "severity": "medium",
+    "mechanism": "Risk of lactic acidosis if patient has pre-existing renal impairment receiving IV contrast.",
+    "recommendation": "Hold metformin at time of contrast and for 48h; restart once renal function confirmed stable."
+  },
+  {
+    "drug_a": "ssri",
+    "drug_a_aliases": ["sertraline", "fluoxetine", "paroxetine", "escitalopram", "citalopram"],
+    "drug_b": "maoi",
+    "drug_b_aliases": ["phenelzine", "tranylcypromine", "selegiline", "linezolid"],
+    "severity": "high",
+    "mechanism": "Risk of fatal serotonin syndrome from combined serotonergic activity.",
+    "recommendation": "Absolute contraindication. Allow 2-week washout (5-week for fluoxetine) between agents."
+  },
+  {
+    "drug_a": "ssri",
+    "drug_a_aliases": ["sertraline", "fluoxetine", "paroxetine", "escitalopram"],
+    "drug_b": "tramadol",
+    "drug_b_aliases": ["ultram"],
+    "severity": "medium",
+    "mechanism": "Both are serotonergic; additive risk of serotonin syndrome and seizure.",
+    "recommendation": "Use cautiously. Monitor for tremor, clonus, hyperreflexia, agitation. Consider alternative analgesic."
+  },
+  {
+    "drug_a": "statin",
+    "drug_a_aliases": ["atorvastatin", "simvastatin", "rosuvastatin", "pravastatin", "lovastatin"],
+    "drug_b": "clarithromycin",
+    "drug_b_aliases": ["biaxin", "erythromycin"],
+    "severity": "high",
+    "mechanism": "Macrolide CYP3A4 inhibition raises statin (esp. simvastatin) levels → rhabdomyolysis risk.",
+    "recommendation": "Hold simvastatin/lovastatin during macrolide course; prefer azithromycin if macrolide needed."
+  },
+  {
+    "drug_a": "metoprolol",
+    "drug_a_aliases": ["beta blocker", "atenolol", "propranolol", "bisoprolol", "carvedilol"],
+    "drug_b": "verapamil",
+    "drug_b_aliases": ["diltiazem", "non-dihydropyridine"],
+    "severity": "high",
+    "mechanism": "Additive negative chronotropy/inotropy → bradycardia, heart block, decompensated HF.",
+    "recommendation": "Avoid combination outside cardiology guidance. If needed, monitor HR and PR interval closely."
+  },
+  {
+    "drug_a": "sildenafil",
+    "drug_a_aliases": ["viagra", "tadalafil", "pde5 inhibitor"],
+    "drug_b": "nitroglycerin",
+    "drug_b_aliases": ["isosorbide", "nitrate"],
+    "severity": "high",
+    "mechanism": "Synergistic vasodilation → profound, potentially fatal hypotension.",
+    "recommendation": "Absolute contraindication within 24h (48h for tadalafil). Alternative antianginals required."
+  },
+  {
+    "drug_a": "amoxicillin",
+    "drug_a_aliases": ["penicillin", "ampicillin", "amoxicillin-clavulanate"],
+    "drug_b": "allopurinol",
+    "drug_b_aliases": [],
+    "severity": "medium",
+    "mechanism": "Increased incidence of drug rash when combined.",
+    "recommendation": "Counsel patient; consider cephalosporin alternative if severe rash history."
+  },
+  {
+    "drug_a": "opioid",
+    "drug_a_aliases": ["oxycodone", "hydrocodone", "morphine", "fentanyl", "codeine", "tramadol"],
+    "drug_b": "benzodiazepine",
+    "drug_b_aliases": ["alprazolam", "lorazepam", "diazepam", "clonazepam", "temazepam", "xanax", "ativan", "valium"],
+    "severity": "high",
+    "mechanism": "Additive CNS and respiratory depression — leading cause of overdose deaths.",
+    "recommendation": "FDA black box warning. Avoid combination. If unavoidable, lowest doses, shortest duration, naloxone on hand."
+  },
+  {
+    "drug_a": "metformin",
+    "drug_a_aliases": [],
+    "drug_b": "alcohol",
+    "drug_b_aliases": [],
+    "severity": "medium",
+    "mechanism": "Binge alcohol increases risk of lactic acidosis with metformin.",
+    "recommendation": "Counsel on moderation. Hold metformin if binge/hospitalized drinking."
+  },
+  {
+    "drug_a": "digoxin",
+    "drug_a_aliases": [],
+    "drug_b": "amiodarone",
+    "drug_b_aliases": ["dronedarone", "verapamil", "clarithromycin"],
+    "severity": "high",
+    "mechanism": "P-glycoprotein inhibition raises digoxin levels → toxicity (arrhythmia, GI, vision changes).",
+    "recommendation": "Reduce digoxin dose by 50% and monitor levels."
+  },
+  {
+    "drug_a": "levothyroxine",
+    "drug_a_aliases": ["synthroid"],
+    "drug_b": "calcium",
+    "drug_b_aliases": ["iron", "antacid", "ppi"],
+    "severity": "low",
+    "mechanism": "Reduced levothyroxine absorption when co-administered.",
+    "recommendation": "Separate administration by at least 4 hours."
+  },
+  {
+    "drug_a": "warfarin",
+    "drug_a_aliases": ["coumadin"],
+    "drug_b": "antibiotic",
+    "drug_b_aliases": ["ciprofloxacin", "levofloxacin", "trimethoprim-sulfamethoxazole", "metronidazole", "fluconazole"],
+    "severity": "medium",
+    "mechanism": "Many antibiotics disturb gut flora and inhibit CYPs → INR increases.",
+    "recommendation": "Recheck INR 3-5 days after starting antibiotic; adjust warfarin dose."
+  },
+  {
+    "drug_a": "albuterol",
+    "drug_a_aliases": ["salbutamol", "levalbuterol"],
+    "drug_b": "beta blocker",
+    "drug_b_aliases": ["propranolol", "metoprolol", "atenolol"],
+    "severity": "medium",
+    "mechanism": "Non-selective beta blockers (propranolol) blunt bronchodilation and may trigger bronchospasm.",
+    "recommendation": "Prefer cardioselective β1 blockers (metoprolol) in asthma/COPD; monitor bronchospasm."
+  },
+  {
+    "drug_a": "insulin",
+    "drug_a_aliases": ["glargine", "lispro", "aspart", "regular insulin"],
+    "drug_b": "beta blocker",
+    "drug_b_aliases": ["propranolol", "atenolol", "metoprolol"],
+    "severity": "medium",
+    "mechanism": "Beta blockers mask adrenergic hypoglycemia symptoms (tremor, tachycardia).",
+    "recommendation": "Educate patient to monitor glucose more closely; diaphoresis still present."
+  },
+  {
+    "drug_a": "prednisone",
+    "drug_a_aliases": ["corticosteroid", "dexamethasone", "methylprednisolone"],
+    "drug_b": "nsaid",
+    "drug_b_aliases": ["ibuprofen", "naproxen", "aspirin"],
+    "severity": "medium",
+    "mechanism": "Combined GI ulcer/bleed risk.",
+    "recommendation": "Add PPI if combination needed >1 week."
+  },
+  {
+    "drug_a": "ciprofloxacin",
+    "drug_a_aliases": ["fluoroquinolone", "levofloxacin", "moxifloxacin"],
+    "drug_b": "qt prolonging agent",
+    "drug_b_aliases": ["amiodarone", "ondansetron", "methadone", "haloperidol", "citalopram"],
+    "severity": "medium",
+    "mechanism": "Additive QT prolongation → torsades risk.",
+    "recommendation": "ECG if multiple QT agents; correct Mg/K; consider alternative antibiotic."
+  },
+  {
+    "drug_a": "clopidogrel",
+    "drug_a_aliases": ["plavix"],
+    "drug_b": "omeprazole",
+    "drug_b_aliases": ["esomeprazole"],
+    "severity": "low",
+    "mechanism": "Reduced clopidogrel activation via CYP2C19 inhibition (clinical significance debated).",
+    "recommendation": "Prefer pantoprazole if PPI required; counsel on bleeding balance."
+  }
+]

@@ -1,0 +1,480 @@
+[
+  {
+    "id": "chest_pain_dyspnea",
+    "label": "Chest pain with shortness of breath",
+    "keyword_groups": [
+      ["chest pain", "chest tightness", "chest pressure", "chest discomfort", "chest hurts"],
+      ["shortness of breath", "short of breath", "dyspnea", "difficulty breathing", "can't breathe", "hard to breathe", "sob"]
+    ],
+    "match_all_groups": true,
+    "urgency_hint": "high",
+    "differential": [
+      {"diagnosis": "Acute Coronary Syndrome", "icd10": "I24.9", "probability": "high"},
+      {"diagnosis": "Pulmonary Embolism", "icd10": "I26.99", "probability": "medium"},
+      {"diagnosis": "Aortic Dissection", "icd10": "I71.00", "probability": "low"}
+    ],
+    "red_flags": ["cardiac_workup_immediate"],
+    "recommended_workup": ["12-lead ECG", "Troponin (serial)", "D-dimer", "Chest X-ray"],
+    "patient_summary": "Your symptoms can sometimes signal a heart or lung problem. A clinician will see you urgently.",
+    "clinician_brief": "Chest pain with dyspnea. Rule out ACS/PE. Obtain ECG, troponin, D-dimer, CXR immediately.",
+    "citations": ["ESI Level 2", "AHA/ACC Chest Pain Guideline 2021"]
+  },
+  {
+    "id": "chest_pain_radiation",
+    "label": "Chest pain radiating to arm/jaw",
+    "keyword_groups": [
+      ["chest pain", "chest pressure", "chest tightness"],
+      ["radiating", "radiates", "into arm", "into jaw", "into shoulder", "left arm", "jaw pain"]
+    ],
+    "match_all_groups": true,
+    "urgency_hint": "high",
+    "differential": [
+      {"diagnosis": "Acute Coronary Syndrome", "icd10": "I24.9", "probability": "high"},
+      {"diagnosis": "Unstable Angina", "icd10": "I20.0", "probability": "high"}
+    ],
+    "red_flags": ["cardiac_workup_immediate"],
+    "recommended_workup": ["12-lead ECG", "Troponin (serial)", "CBC/BMP"],
+    "patient_summary": "Chest pain that spreads to your arm or jaw needs urgent evaluation.",
+    "clinician_brief": "Radiating chest pain — classic ACS pattern. ECG within 10 minutes, serial troponins, aspirin per protocol.",
+    "citations": ["ESI Level 1-2", "AHA/ACC ACS Guideline"]
+  },
+  {
+    "id": "stroke_fast_signs",
+    "label": "Stroke warning signs (FAST)",
+    "keyword_groups": [
+      ["facial droop", "face drooping", "one side of face", "slurred speech", "slurring", "can't speak", "arm weakness", "arm numbness", "sudden weakness", "one side weak"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "high",
+    "differential": [
+      {"diagnosis": "Acute Ischemic Stroke", "icd10": "I63.9", "probability": "high"},
+      {"diagnosis": "Transient Ischemic Attack", "icd10": "G45.9", "probability": "medium"},
+      {"diagnosis": "Intracerebral Hemorrhage", "icd10": "I61.9", "probability": "medium"}
+    ],
+    "red_flags": ["stroke_protocol_immediate"],
+    "recommended_workup": ["NIHSS scoring", "Non-contrast head CT", "POC glucose", "CBC/coag panel"],
+    "patient_summary": "Your symptoms match stroke warning signs. You need to be seen immediately — every minute counts.",
+    "clinician_brief": "FAST-positive presentation. Activate stroke protocol. Head CT within 25 min, determine last-known-well time for tPA eligibility.",
+    "citations": ["ESI Level 1", "AHA Stroke Guidelines 2019"]
+  },
+  {
+    "id": "severe_sudden_headache",
+    "label": "Sudden severe (thunderclap) headache",
+    "keyword_groups": [
+      ["sudden headache", "worst headache", "thunderclap", "severe headache", "sudden severe pain in head"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "high",
+    "differential": [
+      {"diagnosis": "Subarachnoid Hemorrhage", "icd10": "I60.9", "probability": "high"},
+      {"diagnosis": "Meningitis", "icd10": "G03.9", "probability": "medium"},
+      {"diagnosis": "Severe Migraine", "icd10": "G43.909", "probability": "low"}
+    ],
+    "red_flags": ["neuro_workup_immediate"],
+    "recommended_workup": ["Non-contrast head CT", "LP if CT negative and SAH still suspected", "Neuro exam"],
+    "patient_summary": "A sudden, very severe headache can be serious. You'll be seen urgently.",
+    "clinician_brief": "Thunderclap headache. Rule out SAH — CT head stat; LP if clinical suspicion remains with negative CT.",
+    "citations": ["ACEP Headache Clinical Policy 2019"]
+  },
+  {
+    "id": "difficulty_breathing_wheeze",
+    "label": "Acute respiratory distress / wheezing",
+    "keyword_groups": [
+      ["wheezing", "wheeze", "can't breathe", "cannot breathe", "difficulty breathing", "struggling to breathe", "audible wheezing"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "high",
+    "differential": [
+      {"diagnosis": "Asthma Exacerbation", "icd10": "J45.901", "probability": "high"},
+      {"diagnosis": "COPD Exacerbation", "icd10": "J44.1", "probability": "medium"},
+      {"diagnosis": "Anaphylaxis", "icd10": "T78.2XXA", "probability": "medium"}
+    ],
+    "red_flags": ["airway_priority"],
+    "recommended_workup": ["Pulse oximetry", "Peak flow", "CXR if indicated", "Nebulized bronchodilator trial"],
+    "patient_summary": "Your breathing symptoms need urgent evaluation. A clinician will see you right away.",
+    "clinician_brief": "Acute respiratory distress with wheeze. Immediate SpO2, start nebulized albuterol, consider anaphylaxis (epinephrine if suspected).",
+    "citations": ["GINA Asthma Guidelines 2024"]
+  },
+  {
+    "id": "altered_mental_status_fever",
+    "label": "Altered mental status with fever",
+    "keyword_groups": [
+      ["confused", "confusion", "altered mental", "disoriented", "not acting right"],
+      ["fever", "febrile", "high temperature", "temp above 101"]
+    ],
+    "match_all_groups": true,
+    "urgency_hint": "high",
+    "differential": [
+      {"diagnosis": "Sepsis", "icd10": "A41.9", "probability": "high"},
+      {"diagnosis": "Meningitis", "icd10": "G03.9", "probability": "medium"},
+      {"diagnosis": "Encephalitis", "icd10": "G04.90", "probability": "low"}
+    ],
+    "red_flags": ["sepsis_bundle"],
+    "recommended_workup": ["Lactate", "Blood cultures x2", "CBC/BMP", "UA", "Consider LP"],
+    "patient_summary": "Confusion with fever can signal a serious infection. You need urgent evaluation.",
+    "clinician_brief": "AMS + fever. Treat as sepsis until proven otherwise. Lactate, cultures, broad-spectrum antibiotics within 1 hour if qSOFA≥2.",
+    "citations": ["Surviving Sepsis Campaign 2021"]
+  },
+  {
+    "id": "anaphylaxis_signs",
+    "label": "Suspected anaphylaxis",
+    "keyword_groups": [
+      ["swelling of face", "facial swelling", "lip swelling", "tongue swelling", "throat closing", "hives all over", "widespread rash", "after eating", "after bee sting"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "high",
+    "differential": [
+      {"diagnosis": "Anaphylaxis", "icd10": "T78.2XXA", "probability": "high"},
+      {"diagnosis": "Angioedema", "icd10": "T78.3XXA", "probability": "medium"}
+    ],
+    "red_flags": ["airway_priority", "epi_pen_ready"],
+    "recommended_workup": ["Airway assessment", "IM epinephrine 0.3mg", "H1/H2 blockers", "IV fluids"],
+    "patient_summary": "Your symptoms can signal a severe allergic reaction. Immediate care is needed.",
+    "clinician_brief": "Suspected anaphylaxis. IM epinephrine first-line regardless of severity tier; do not delay.",
+    "citations": ["WAO Anaphylaxis Guidelines 2020"]
+  },
+  {
+    "id": "suicidal_ideation",
+    "label": "Suicidal ideation or self-harm",
+    "keyword_groups": [
+      ["suicidal", "kill myself", "end my life", "want to die", "self-harm", "hurt myself", "no reason to live"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "high",
+    "differential": [
+      {"diagnosis": "Major Depressive Disorder, severe", "icd10": "F33.2", "probability": "high"},
+      {"diagnosis": "Acute suicidality", "icd10": "R45.851", "probability": "high"}
+    ],
+    "red_flags": ["behavioral_hold", "one_to_one_observation"],
+    "recommended_workup": ["Columbia Suicide Severity Rating", "1:1 observation", "Remove means", "Psychiatry consult"],
+    "patient_summary": "Thank you for telling us. A clinician will be with you very soon, and you will not be alone.",
+    "clinician_brief": "Active SI disclosed at intake. Initiate 1:1, remove means, psych consult, do not discharge pending evaluation.",
+    "citations": ["Joint Commission NPSG 15.01.01"]
+  },
+  {
+    "id": "uri_fever_cough",
+    "label": "Cough with fever (possible pneumonia)",
+    "keyword_groups": [
+      ["cough", "productive cough", "coughing"],
+      ["fever", "febrile", "high temperature"]
+    ],
+    "match_all_groups": true,
+    "urgency_hint": "medium",
+    "differential": [
+      {"diagnosis": "Community-Acquired Pneumonia", "icd10": "J18.9", "probability": "medium"},
+      {"diagnosis": "Acute Bronchitis", "icd10": "J20.9", "probability": "medium"},
+      {"diagnosis": "Influenza", "icd10": "J11.1", "probability": "medium"}
+    ],
+    "red_flags": [],
+    "recommended_workup": ["CXR if hypoxic or tachypneic", "CBC", "Influenza/COVID PCR", "Pulse oximetry"],
+    "patient_summary": "Cough with fever is common but sometimes needs a closer look. You'll be seen soon.",
+    "clinician_brief": "Cough + fever. Check SpO2 and RR; CXR if pneumonia suspected. CURB-65 if admission decision needed.",
+    "citations": ["IDSA/ATS CAP Guidelines 2019"]
+  },
+  {
+    "id": "severe_sore_throat_dysphagia",
+    "label": "Severe sore throat with trouble swallowing",
+    "keyword_groups": [
+      ["sore throat", "throat pain"],
+      ["can't swallow", "trouble swallowing", "difficulty swallowing", "drooling"]
+    ],
+    "match_all_groups": true,
+    "urgency_hint": "medium",
+    "differential": [
+      {"diagnosis": "Peritonsillar Abscess", "icd10": "J36", "probability": "medium"},
+      {"diagnosis": "Streptococcal Pharyngitis", "icd10": "J02.0", "probability": "medium"},
+      {"diagnosis": "Epiglottitis", "icd10": "J05.10", "probability": "low"}
+    ],
+    "red_flags": ["airway_watch"],
+    "recommended_workup": ["Throat exam (avoid if epiglottitis suspected)", "Rapid strep", "CBC"],
+    "patient_summary": "Severe throat pain with trouble swallowing deserves a closer look.",
+    "clinician_brief": "Dysphagia with sore throat — assess for PTA, Ludwig's, or epiglottitis; if drooling/tripoding, do not examine throat, secure airway.",
+    "citations": ["IDSA GAS Pharyngitis Guidelines 2012"]
+  },
+  {
+    "id": "uti_with_fever",
+    "label": "Urinary symptoms with fever",
+    "keyword_groups": [
+      ["burning when peeing", "painful urination", "dysuria", "frequent urination", "urinary frequency"],
+      ["fever", "back pain", "flank pain", "chills"]
+    ],
+    "match_all_groups": true,
+    "urgency_hint": "medium",
+    "differential": [
+      {"diagnosis": "Pyelonephritis", "icd10": "N10", "probability": "high"},
+      {"diagnosis": "Complicated UTI", "icd10": "N39.0", "probability": "medium"}
+    ],
+    "red_flags": [],
+    "recommended_workup": ["UA with culture", "CBC/BMP", "Consider imaging if recurrent"],
+    "patient_summary": "Your symptoms suggest a urinary tract infection that may need antibiotics.",
+    "clinician_brief": "Febrile UTI — treat as pyelonephritis. Urine culture before antibiotics; empiric ceftriaxone if admitted.",
+    "citations": ["IDSA UTI Guidelines 2010 (updated)"]
+  },
+  {
+    "id": "extremity_swelling_unilateral",
+    "label": "One-sided leg swelling / pain",
+    "keyword_groups": [
+      ["leg swelling", "calf swelling", "one leg swollen", "swollen leg", "calf pain"],
+      ["one leg", "unilateral", "right leg", "left leg"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "medium",
+    "differential": [
+      {"diagnosis": "Deep Vein Thrombosis", "icd10": "I82.40", "probability": "medium"},
+      {"diagnosis": "Cellulitis", "icd10": "L03.119", "probability": "medium"},
+      {"diagnosis": "Baker's Cyst rupture", "icd10": "M71.2", "probability": "low"}
+    ],
+    "red_flags": ["dvt_workup"],
+    "recommended_workup": ["Wells score", "D-dimer if low/moderate probability", "Compression US"],
+    "patient_summary": "One-sided leg swelling can signal a clot. You'll be evaluated soon.",
+    "clinician_brief": "Unilateral leg swelling. Wells score → D-dimer vs Doppler US. Consider anticoagulation pending workup if high pre-test probability.",
+    "citations": ["ACP DVT Guidelines 2015"]
+  },
+  {
+    "id": "mild_uri",
+    "label": "Mild upper respiratory symptoms",
+    "keyword_groups": [
+      ["runny nose", "stuffy nose", "congestion", "sneezing", "sore throat", "mild cough"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "low",
+    "differential": [
+      {"diagnosis": "Viral Upper Respiratory Infection", "icd10": "J06.9", "probability": "high"},
+      {"diagnosis": "Allergic Rhinitis", "icd10": "J30.9", "probability": "medium"}
+    ],
+    "red_flags": [],
+    "recommended_workup": ["Symptom-based; no tests routinely needed"],
+    "patient_summary": "This looks like a common cold. You'll be seen soon — rest and fluids help.",
+    "clinician_brief": "Viral URI picture. Supportive care; educate on red flags (dyspnea, persistent fever >5 days, chest pain).",
+    "citations": ["AAFP Common Cold 2019"]
+  },
+  {
+    "id": "musculoskeletal_strain",
+    "label": "Muscle strain / minor injury",
+    "keyword_groups": [
+      ["muscle pain", "strain", "sprain", "pulled muscle", "back strain", "after lifting", "after workout", "after exercise"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "low",
+    "differential": [
+      {"diagnosis": "Muscle Strain", "icd10": "M62.9", "probability": "high"},
+      {"diagnosis": "Ligament Sprain", "icd10": "S93.409A", "probability": "medium"}
+    ],
+    "red_flags": [],
+    "recommended_workup": ["Focused exam; imaging only if red flags present"],
+    "patient_summary": "This sounds like a soft-tissue strain. RICE (rest, ice, compression, elevation) usually helps.",
+    "clinician_brief": "Musculoskeletal strain pattern. Rule out red flags (neuro deficit, fracture, acute abdomen). NSAIDs if appropriate.",
+    "citations": ["AAFP MSK 2020"]
+  },
+  {
+    "id": "medication_refill",
+    "label": "Medication refill / chronic condition follow-up",
+    "keyword_groups": [
+      ["refill", "prescription refill", "medication renewal", "out of medication", "running out of"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "low",
+    "differential": [
+      {"diagnosis": "Chronic condition management", "icd10": "Z79.899", "probability": "high"}
+    ],
+    "red_flags": [],
+    "recommended_workup": ["Medication reconciliation", "Adherence check", "Relevant monitoring labs"],
+    "patient_summary": "Your refill request will be reviewed shortly.",
+    "clinician_brief": "Refill request. Verify last prescribing provider, check for interim labs due, confirm adherence.",
+    "citations": ["Medication reconciliation best practice"]
+  },
+  {
+    "id": "migraine_typical",
+    "label": "Typical migraine headache",
+    "keyword_groups": [
+      ["headache", "migraine", "head pain"],
+      ["throbbing", "one side", "with nausea", "sensitive to light", "photophobia"]
+    ],
+    "match_all_groups": true,
+    "urgency_hint": "medium",
+    "differential": [
+      {"diagnosis": "Migraine without aura", "icd10": "G43.009", "probability": "high"},
+      {"diagnosis": "Migraine with aura", "icd10": "G43.109", "probability": "medium"},
+      {"diagnosis": "Tension headache", "icd10": "G44.209", "probability": "medium"}
+    ],
+    "red_flags": [],
+    "recommended_workup": ["Neuro exam", "Imaging only if red-flag features (thunderclap, focal deficit, age>50 new onset)"],
+    "patient_summary": "Your symptoms are consistent with a migraine. A clinician will help manage the pain.",
+    "clinician_brief": "Migraine pattern. Treat acutely (triptan if no contraindication, NSAID, antiemetic). Screen for POUNDing features. Image only with red flags.",
+    "citations": ["AHS Migraine Guidelines 2021"]
+  },
+  {
+    "id": "hypertension_symptomatic",
+    "label": "Elevated blood pressure with symptoms",
+    "keyword_groups": [
+      ["high blood pressure", "elevated bp", "blood pressure reading"],
+      ["headache", "blurred vision", "dizziness", "nosebleed"]
+    ],
+    "match_all_groups": true,
+    "urgency_hint": "medium",
+    "differential": [
+      {"diagnosis": "Hypertensive Urgency", "icd10": "I16.0", "probability": "medium"},
+      {"diagnosis": "Essential Hypertension", "icd10": "I10", "probability": "high"}
+    ],
+    "red_flags": ["bp_monitor_closely"],
+    "recommended_workup": ["Repeat BP on both arms", "BMP/UA for end-organ damage", "ECG if chest sx"],
+    "patient_summary": "Your blood pressure symptoms need a closer look. You'll be seen shortly.",
+    "clinician_brief": "Elevated BP with symptoms. Rule out hypertensive emergency (end-organ). If urgency only, gradual BP reduction, avoid acute drops.",
+    "citations": ["AHA/ACC Hypertension Guidelines 2017"]
+  },
+  {
+    "id": "back_pain_chronic",
+    "label": "Chronic back pain without red flags",
+    "keyword_groups": [
+      ["back pain", "lower back pain", "back ache"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "low",
+    "differential": [
+      {"diagnosis": "Mechanical Low Back Pain", "icd10": "M54.5", "probability": "high"},
+      {"diagnosis": "Lumbar Strain", "icd10": "S39.012A", "probability": "high"}
+    ],
+    "red_flags": [],
+    "recommended_workup": ["Focused exam; imaging only if red flags (trauma, neuro deficit, cauda equina sx, cancer hx)"],
+    "patient_summary": "Most back pain improves with time and self-care. You'll be evaluated soon.",
+    "clinician_brief": "Non-specific LBP. Screen for red flags; first-line NSAID, stay active, PT referral if persists >4 weeks.",
+    "citations": ["ACP Low Back Pain Guidelines 2017"]
+  },
+  {
+    "id": "abdominal_pain_severe",
+    "label": "Severe abdominal pain",
+    "keyword_groups": [
+      ["severe abdominal pain", "severe stomach pain", "sharp abdominal pain", "10 out of 10 stomach"],
+      ["vomiting", "can't keep anything down", "bloody stool", "black stool"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "high",
+    "differential": [
+      {"diagnosis": "Acute Appendicitis", "icd10": "K35.80", "probability": "medium"},
+      {"diagnosis": "Bowel Obstruction", "icd10": "K56.60", "probability": "medium"},
+      {"diagnosis": "Mesenteric Ischemia", "icd10": "K55.059", "probability": "low"},
+      {"diagnosis": "Perforated Viscus", "icd10": "K63.1", "probability": "low"}
+    ],
+    "red_flags": ["surgical_abdomen_watch"],
+    "recommended_workup": ["CBC/BMP/lipase", "Lactate", "CT abdomen/pelvis with contrast", "Upright CXR if perforation suspected"],
+    "patient_summary": "Severe abdominal pain needs urgent evaluation to rule out serious causes.",
+    "clinician_brief": "Severe abdominal pain with possible surgical features. NPO, IV access, labs + CT. Surgical consult if peritoneal signs.",
+    "citations": ["ACEP Acute Abdomen Clinical Policy"]
+  },
+  {
+    "id": "syncope_episode",
+    "label": "Fainting / loss of consciousness",
+    "keyword_groups": [
+      ["fainted", "passed out", "lost consciousness", "syncope", "blacked out"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "medium",
+    "differential": [
+      {"diagnosis": "Vasovagal Syncope", "icd10": "R55", "probability": "high"},
+      {"diagnosis": "Cardiac Syncope (arrhythmia)", "icd10": "I49.9", "probability": "medium"},
+      {"diagnosis": "Orthostatic Hypotension", "icd10": "I95.1", "probability": "medium"}
+    ],
+    "red_flags": ["cardiac_workup"],
+    "recommended_workup": ["12-lead ECG", "Orthostatic vitals", "CBC/BMP/glucose"],
+    "patient_summary": "Fainting deserves a closer look to understand the cause.",
+    "clinician_brief": "Syncope. ECG mandatory; risk-stratify (San Francisco Syncope Rule). Admit if cardiac features or concerning ECG.",
+    "citations": ["ACC/AHA Syncope Guidelines 2017"]
+  },
+  {
+    "id": "diabetic_concern",
+    "label": "Blood sugar / diabetes concern",
+    "keyword_groups": [
+      ["high blood sugar", "low blood sugar", "hypoglycemia", "hyperglycemia", "diabetic"],
+      ["confused", "dizzy", "sweating", "shaky", "nausea", "thirsty"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "medium",
+    "differential": [
+      {"diagnosis": "Diabetic Ketoacidosis", "icd10": "E11.10", "probability": "medium"},
+      {"diagnosis": "Hyperosmolar Hyperglycemic State", "icd10": "E11.00", "probability": "low"},
+      {"diagnosis": "Hypoglycemia", "icd10": "E16.2", "probability": "medium"}
+    ],
+    "red_flags": [],
+    "recommended_workup": ["POC glucose", "BMP", "Urine/serum ketones if hyperglycemia", "Arterial/venous gas if concern for DKA"],
+    "patient_summary": "Blood sugar concerns need timely evaluation.",
+    "clinician_brief": "Dysglycemia. Immediate POC glucose; treat hypoglycemia with D50/glucagon; work up DKA if hyperglycemic with ketones/acidosis.",
+    "citations": ["ADA Standards of Care 2024"]
+  },
+  {
+    "id": "pediatric_fever",
+    "label": "Fever in young child",
+    "keyword_groups": [
+      ["fever", "high temperature", "febrile"],
+      ["child", "infant", "baby", "toddler", "my son", "my daughter"]
+    ],
+    "match_all_groups": true,
+    "urgency_hint": "medium",
+    "differential": [
+      {"diagnosis": "Viral illness", "icd10": "B34.9", "probability": "high"},
+      {"diagnosis": "Serious Bacterial Infection (rule out)", "icd10": "A49.9", "probability": "low"}
+    ],
+    "red_flags": ["pediatric_sepsis_screen"],
+    "recommended_workup": ["Complete vitals", "Hydration assessment", "Age-appropriate workup (neonates require full sepsis w/u)"],
+    "patient_summary": "Your child will be seen soon. Please stay nearby and let staff know if anything worsens.",
+    "clinician_brief": "Pediatric fever. Age-stratified approach — <28d full sepsis w/u; 1-3mo Rochester criteria; >3mo clinical + context.",
+    "citations": ["AAP Pediatric Fever Guidelines"]
+  },
+  {
+    "id": "pregnancy_bleeding",
+    "label": "Vaginal bleeding during pregnancy",
+    "keyword_groups": [
+      ["pregnant", "pregnancy"],
+      ["bleeding", "spotting", "blood", "cramping"]
+    ],
+    "match_all_groups": true,
+    "urgency_hint": "high",
+    "differential": [
+      {"diagnosis": "Ectopic Pregnancy", "icd10": "O00.9", "probability": "medium"},
+      {"diagnosis": "Threatened/Spontaneous Abortion", "icd10": "O20.0", "probability": "medium"},
+      {"diagnosis": "Placental Abruption (if 2nd/3rd trimester)", "icd10": "O45.9", "probability": "low"}
+    ],
+    "red_flags": ["obstetric_priority"],
+    "recommended_workup": ["Quantitative β-hCG", "Type & screen", "Pelvic US (transvaginal if <10w)", "Rh status"],
+    "patient_summary": "Bleeding in pregnancy always needs urgent evaluation. A clinician will see you soon.",
+    "clinician_brief": "Pregnancy + bleeding. Rule out ectopic (β-hCG, pelvic US). RhoGAM if Rh-negative. OB consult per gestational age.",
+    "citations": ["ACOG Guidelines"]
+  },
+  {
+    "id": "dehydration_vomiting",
+    "label": "Persistent vomiting / dehydration",
+    "keyword_groups": [
+      ["vomiting", "throwing up", "can't keep food down", "can't keep fluids"],
+      ["for days", "for hours", "repeatedly", "non-stop"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "medium",
+    "differential": [
+      {"diagnosis": "Viral Gastroenteritis", "icd10": "A08.4", "probability": "high"},
+      {"diagnosis": "Dehydration", "icd10": "E86.0", "probability": "high"}
+    ],
+    "red_flags": [],
+    "recommended_workup": ["BMP", "Urinalysis (ketones, specific gravity)", "Orthostatic vitals"],
+    "patient_summary": "Persistent vomiting can cause dehydration. We'll likely give you fluids and anti-nausea support.",
+    "clinician_brief": "Vomiting + likely volume depletion. IVF bolus, antiemetic (ondansetron), BMP to assess electrolytes.",
+    "citations": ["ACEP Gastroenteritis Policy"]
+  },
+  {
+    "id": "mild_rash",
+    "label": "Mild localized rash",
+    "keyword_groups": [
+      ["rash", "itchy skin", "hives"],
+      ["small area", "localized", "on my arm", "on my leg"]
+    ],
+    "match_all_groups": false,
+    "urgency_hint": "low",
+    "differential": [
+      {"diagnosis": "Contact Dermatitis", "icd10": "L25.9", "probability": "high"},
+      {"diagnosis": "Urticaria", "icd10": "L50.9", "probability": "medium"}
+    ],
+    "red_flags": [],
+    "recommended_workup": ["Skin exam", "Trigger history"],
+    "patient_summary": "This looks like a localized skin reaction. You'll be seen soon.",
+    "clinician_brief": "Localized dermatitis/urticaria. Topical steroid + antihistamine; return precautions for spreading rash, swelling, or dyspnea.",
+    "citations": ["AAD Dermatitis Guidelines"]
+  }
+]

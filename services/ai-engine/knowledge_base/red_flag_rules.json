@@ -1,0 +1,107 @@
+[
+  {
+    "id": "chest_pain_over_45",
+    "trigger_keywords": ["chest pain", "chest pressure", "chest tightness", "chest discomfort"],
+    "age_min": 45,
+    "urgency_override": "high",
+    "action": "cardiac_workup_required",
+    "message": "Chest pain in patients ≥45 carries elevated MACE risk. Initiate cardiac workup (ECG + troponin) regardless of severity tier.",
+    "evidence": "AHA/ACC 2021 Chest Pain Guideline"
+  },
+  {
+    "id": "fever_with_confusion_elderly",
+    "trigger_keywords": ["confused", "confusion", "altered mental", "disoriented"],
+    "requires_also": ["fever", "febrile"],
+    "age_min": 65,
+    "urgency_override": "high",
+    "action": "sepsis_screen_required",
+    "message": "Altered mental status with fever in patients ≥65 is sepsis until proven otherwise. Initiate sepsis bundle.",
+    "evidence": "Surviving Sepsis Campaign 2021"
+  },
+  {
+    "id": "pregnancy_abdominal_pain",
+    "trigger_keywords": ["abdominal pain", "stomach pain", "pelvic pain", "cramping"],
+    "requires_also": ["pregnant", "pregnancy", "missed period"],
+    "urgency_override": "high",
+    "action": "ectopic_rule_out",
+    "message": "Abdominal pain in pregnancy (or possible pregnancy) requires immediate ectopic rule-out.",
+    "evidence": "ACOG Ectopic Pregnancy Guidelines"
+  },
+  {
+    "id": "sudden_worst_headache",
+    "trigger_keywords": ["worst headache", "thunderclap", "sudden severe headache"],
+    "urgency_override": "high",
+    "action": "sah_rule_out",
+    "message": "Thunderclap / 'worst headache of life' requires SAH rule-out with non-contrast head CT.",
+    "evidence": "ACEP Headache Clinical Policy"
+  },
+  {
+    "id": "neuro_deficit_any",
+    "trigger_keywords": ["facial droop", "slurred speech", "arm weakness", "leg weakness", "can't move", "one side weak", "numbness on one side", "vision loss"],
+    "urgency_override": "high",
+    "action": "stroke_protocol",
+    "message": "Any focal neurologic deficit — activate stroke protocol. Time is brain.",
+    "evidence": "AHA Stroke Guidelines 2019"
+  },
+  {
+    "id": "suicidal_disclosure",
+    "trigger_keywords": ["suicidal", "kill myself", "end my life", "want to die", "hurt myself"],
+    "urgency_override": "high",
+    "action": "behavioral_hold",
+    "message": "Active suicidality disclosed. Initiate 1:1 observation, remove means, do not discharge pending psych evaluation.",
+    "evidence": "Joint Commission NPSG 15.01.01"
+  },
+  {
+    "id": "anaphylaxis_airway",
+    "trigger_keywords": ["throat closing", "throat swelling", "tongue swelling", "can't breathe after", "hives all over"],
+    "urgency_override": "high",
+    "action": "epi_first_line",
+    "message": "Airway or multisystem allergic features — IM epinephrine is first-line, do not wait for labs.",
+    "evidence": "WAO Anaphylaxis Guidelines 2020"
+  },
+  {
+    "id": "abdominal_pain_with_vomiting_severe",
+    "trigger_keywords": ["severe abdominal pain"],
+    "requires_also": ["vomiting", "bloody stool", "black stool", "can't keep down"],
+    "urgency_override": "high",
+    "action": "surgical_abdomen_rule_out",
+    "message": "Severe abdominal pain with GI bleeding or intractable vomiting — rule out surgical abdomen.",
+    "evidence": "ACEP Acute Abdomen Clinical Policy"
+  },
+  {
+    "id": "testicular_pain_acute",
+    "trigger_keywords": ["testicular pain", "scrotal pain", "testicle pain"],
+    "requires_also": ["sudden", "severe"],
+    "urgency_override": "high",
+    "action": "torsion_rule_out",
+    "message": "Acute severe testicular pain — torsion has a 6-hour salvage window. Doppler US urgently.",
+    "evidence": "AUA Urologic Emergencies"
+  },
+  {
+    "id": "pediatric_neonate_fever",
+    "trigger_keywords": ["fever", "high temperature"],
+    "requires_also": ["newborn", "neonate", "under 28 days", "weeks old", "month old"],
+    "urgency_override": "high",
+    "action": "full_sepsis_workup",
+    "message": "Fever in a neonate requires full sepsis workup (blood, urine, CSF) and empiric antibiotics.",
+    "evidence": "AAP Neonatal Fever Guidelines"
+  },
+  {
+    "id": "pregnant_hypertension",
+    "trigger_keywords": ["high blood pressure", "headache", "blurred vision"],
+    "requires_also": ["pregnant", "pregnancy", "third trimester"],
+    "urgency_override": "high",
+    "action": "preeclampsia_rule_out",
+    "message": "Elevated BP or HELLP symptoms in pregnancy — rule out preeclampsia/eclampsia urgently.",
+    "evidence": "ACOG Preeclampsia Guidelines"
+  },
+  {
+    "id": "anticoagulation_head_strike",
+    "trigger_keywords": ["hit my head", "head injury", "fell and hit", "bumped head"],
+    "requires_also": ["warfarin", "eliquis", "xarelto", "pradaxa", "blood thinner", "anticoagulant"],
+    "urgency_override": "high",
+    "action": "head_ct_anticoag",
+    "message": "Head strike on anticoagulation — CT head recommended even with minor mechanism.",
+    "evidence": "ACEP Mild TBI Clinical Policy"
+  }
+]
