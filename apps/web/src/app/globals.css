@@ -1,0 +1,458 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-inter: var(--font-inter);
+  --font-heading: var(--font-inter);
+  
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  
+  /* Brand Extensions */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Radius tiers — see documents/ux design/00-design-system-foundations.md § 11 */
+  --radius-chip:    6px;
+  --radius-control: 8px;
+  --radius-nav:     10px;
+  --radius-card:    12px;
+  --radius-dialog:  16px;
+  --radius-feature: 40px;
+
+  /* Chart palette — 20 § 4. Urgency channels are reserved. */
+  --urgency-high:   #C62828;
+  --urgency-medium: #E65100;
+  --urgency-low:    #2E7D32;
+  --chart-series-1: #1565C0;
+  --chart-series-2: #2E7D32;
+  --chart-series-3: #0369A1;
+  --chart-series-4: #6B7280;
+  --chart-series-5: #9333EA;
+  --chart-series-6: #0F766E;
+  --chart-series-7: #374151;
+
+  --background: #F1F5F9;
+  --foreground: #0F172A;
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+  --primary: #0F4C81;
+  --primary-foreground: #FFFFFF;
+  --secondary: #0F766E;
+  --secondary-foreground: #FFFFFF;
+  --muted: #F8FAFC;
+  --muted-foreground: #64748B;
+  --accent: #F8FAFC;
+  --accent-foreground: #0F4C81;
+  --destructive: #B91C1C;
+  --destructive-foreground: #FFFFFF;
+  --border: #CBD5E1;
+  --input: #CBD5E1;
+  --ring: #0F4C81;
+  
+  /* Brand States */
+  --success: #2E7D32;
+  --success-foreground: #FFFFFF;
+  --warning: #B45309;
+  --warning-foreground: #FFFFFF;
+  --info: #0369A1;
+  --info-foreground: #FFFFFF;
+
+  --chart-1: #0F4C81;
+  --chart-2: #0F766E;
+  --chart-3: #2E7D32;
+  --chart-4: #B45309;
+  --chart-5: #0369A1;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: #0F172A;
+  --foreground: #F8FAFC;
+  --card: #1E293B;
+  --card-foreground: #F8FAFC;
+  --popover: #1E293B;
+  --popover-foreground: #F8FAFC;
+  --primary: #3B82F6;
+  --primary-foreground: #0F172A;
+  --secondary: #14B8A6;
+  --secondary-foreground: #0F172A;
+  --muted: #1E293B;
+  --muted-foreground: #94A3B8;
+  --accent: #1E293B;
+  --accent-foreground: #F8FAFC;
+  --destructive: #EF4444;
+  --destructive-foreground: #F8FAFC;
+  --border: #334155;
+  --input: #334155;
+  --ring: #3B82F6;
+  
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --info: #38BDF8;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+
+  /* Critical: fix the flex chain so AppShell 100vh is respected in all browsers */
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: #F1F5F9;
+    color: #0F172A;
+    font-family: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  /* Scrollbar styling for all overflow-auto containers */
+  ::-webkit-scrollbar              { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track        { background: transparent; }
+  ::-webkit-scrollbar-thumb        { background: #CBD5E1; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover  { background: #94A3B8; }
+
+  /* Core UI Shadows — calibrated for calm/healthcare tone */
+  .shadow-resting {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+  }
+  .shadow-elevated {
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .shadow-dialog {
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.14);
+  }
+
+  /* Mobile safe-area helper for fixed bottom CTAs (spec 19 § 7.2, 96) */
+  .safe-area-pb {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Unified visual primitives — the canonical look for every surface.
+     See documents/ux design/00 § 11 (radius), 90 (card), 19 § 7 (focus).
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* Canonical card — use everywhere instead of ad-hoc
+     `bg-white border border-slate-300 rounded-[16px] shadow-resting`. */
+  .fc-card {
+    background-color: var(--card);
+    border: 1px solid #E2E8F0;
+    border-radius: var(--radius-card);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .fc-card-interactive {
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  }
+  .fc-card-interactive:hover {
+    border-color: #CBD5E1;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .fc-card-interactive:focus-visible {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.18);
+  }
+
+  /* Muted grouped-panel surface (e.g. action rails, review blocks). */
+  .fc-card-muted {
+    background-color: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: var(--radius-dialog);
+  }
+
+  /* Feature / brand / persona card — restrained, not flashy. */
+  .fc-card-feature {
+    background-color: var(--card);
+    border: 1px solid #E2E8F0;
+    border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .fc-card-feature:hover {
+    border-color: rgba(15, 76, 129, 0.5);
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+  }
+
+  /* Dark / auth variant of the feature card. */
+  .fc-card-feature-dark {
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+  }
+  .fc-card-feature-dark:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  /* Unified section / page titles. Replaces italic/uppercase/tracking-tighter. */
+  .fc-page-title {
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #0F172A;
+  }
+  @media (min-width: 768px) {
+    .fc-page-title {
+      font-size: 24px;
+      line-height: 30px;
+    }
+  }
+  .fc-page-subtitle {
+    font-size: 13px;
+    line-height: 18px;
+    color: #64748B;
+    margin-top: 4px;
+  }
+  .fc-section-title {
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+    color: #0F172A;
+    letter-spacing: -0.005em;
+  }
+  .fc-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #64748B;
+  }
+
+  /* Single focus-ring utility (spec 19 § 7.4). 2 px, never outline:none. */
+  .fc-focus-ring {
+    outline: none;
+  }
+  .fc-focus-ring:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  /* Table primitives — sticky thead, hover, selected (spec 92). */
+  .fc-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .fc-table thead th {
+    background-color: #F8FAFC;
+    color: #64748B;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #E2E8F0;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .fc-table tbody td {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #334155;
+    border-bottom: 1px solid #F1F5F9;
+  }
+  .fc-table tbody tr {
+    transition: background-color 0.12s ease;
+  }
+  .fc-table tbody tr:hover {
+    background-color: #F8FAFC;
+  }
+  .fc-table tbody tr[aria-selected="true"],
+  .fc-table tbody tr.is-selected {
+    background-color: rgba(15, 76, 129, 0.05);
+    box-shadow: inset 3px 0 0 var(--primary);
+  }
+
+  /* Calm skeleton pulse — uses a single token-derived gradient. */
+  .fc-skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(15, 23, 42, 0.04) 25%,
+      rgba(15, 23, 42, 0.08) 37%,
+      rgba(15, 23, 42, 0.04) 63%
+    );
+    background-size: 400% 100%;
+    animation: fcShimmer 1.4s ease infinite;
+    border-radius: 6px;
+  }
+  @keyframes fcShimmer {
+    0%   { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Divider with consistent tone (no slate-100/200/300 ambiguity). */
+  .fc-divider {
+    border-color: #E2E8F0;
+  }
+
+  /* Suppress the default <summary> marker so our Disclosure component
+     can own the chevron. WebKit needs a separate pseudo. */
+  .fc-disclosure > summary::-webkit-details-marker {
+    display: none;
+  }
+  .fc-disclosure > summary {
+    list-style: none;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────
+     Emphasis primitives — use to make a single item visually "stand out"
+     without inventing bespoke backgrounds/borders per page.
+     ───────────────────────────────────────────────────────────────────── */
+
+  /* Small inline pill; primary = blue, soft = slate, danger/warn/ok variants. */
+  .fc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .fc-badge-primary { background: #EEF2FF; color: #1E40AF; border-color: #C7D2FE; }
+  .fc-badge-soft    { background: #F1F5F9; color: #475569; border-color: #E2E8F0; }
+  .fc-badge-success { background: #ECFDF5; color: #047857; border-color: #A7F3D0; }
+  .fc-badge-warn    { background: #FFFBEB; color: #B45309; border-color: #FDE68A; }
+  .fc-badge-danger  { background: #FEF2F2; color: #B91C1C; border-color: #FECACA; }
+
+  /* Highlight rail — vertical accent on the left edge of a card to mark
+     a standout item (e.g. the #1 prioritized case, the red-flag brief). */
+  .fc-highlight-primary  { box-shadow: inset 3px 0 0 #1565C0; }
+  .fc-highlight-warn     { box-shadow: inset 3px 0 0 #E65100; }
+  .fc-highlight-danger   { box-shadow: inset 3px 0 0 #C62828; }
+  .fc-highlight-success  { box-shadow: inset 3px 0 0 #2E7D32; }
+
+  /* Definition list — consistent label → value rows for summary panels.
+     Replaces the copy-pasted `<dl><div className="flex justify-between">`. */
+  .fc-dl { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+  .fc-dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .fc-dl dt { color: #64748B; }
+  .fc-dl dd { color: #0F172A; font-weight: 500; text-align: right; }
+
+  /* Toolbar — unified filter/search strip used on queue + table pages. */
+  .fc-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-height: 48px;
+    padding: 8px 12px;
+    background: #F8FAFC;
+    border-bottom: 1px solid #E2E8F0;
+  }
+
+  /* Unified text input. Replaces ad-hoc `h-[40px] border rounded px-3` stacks. */
+  .fc-text-input {
+    width: 100%;
+    height: 38px;
+    border: 1px solid #CBD5E1;
+    border-radius: 8px;
+    padding: 0 12px;
+    font-size: 13.5px;
+    color: #0F172A;
+    background: #FFFFFF;
+    outline: none;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  }
+  .fc-text-input::placeholder { color: #94A3B8; }
+  .fc-text-input:hover   { border-color: #94A3B8; }
+  .fc-text-input:focus   { border-color: #0F4C81; box-shadow: 0 0 0 3px rgba(15,76,129,0.12); }
+  textarea.fc-text-input { height: auto; padding: 10px 12px; line-height: 20px; }
+  select.fc-text-input   { appearance: auto; padding-right: 30px; }
+}
+
+/* Reduced-motion respect — spec 19 § 7.5, 20 § 2.3 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Skeleton pulse allowed but slowed, per spec 20 § 2.3 */
+  .animate-pulse {
+    animation-duration: 0.1s !important;
+  }
+}
+
+/* Hide the Next.js 15 dev portal/indicators as requested */
+nextjs-portal {
+  display: none !important;
+}
