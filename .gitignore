@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
+# dependencies (root and every workspace)
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -11,14 +11,15 @@
 !.yarn/versions
 
 # testing
-/coverage
+coverage/
 
-# next.js
-/.next/
-/out/
+# Next.js — root and every workspace
+.next/
+out/
 
 # production
-/build
+build/
+dist/
 
 # misc
 .DS_Store
@@ -30,8 +31,15 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files — block real secrets, allow templates
+.env
+.env.local
+.env.development
+.env.production
+.env*.local
+# DO ship .env.example so collaborators / judges can bootstrap.
+!.env.example
+!**/.env.example
 
 # vercel
 .vercel
@@ -39,3 +47,45 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python (services/ai-engine)
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE / OS noise
+.idea/
+.vscode/*
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local logs and scratch
+*.log
+.scratch/
+projects/*/build/
+projects/*/dist/
+
+# Uvicorn detached log from the smoke test runner
+.uvicorn.log
+.uvicorn.err.log
+
+# Comment extraction scratch scripts (kept locally, not for the hackathon repo)
+apply-comment-strategy.js
+extract_comments.js
+paraphrase-comments.js
+
+# Internal design and audit notes (not part of the public submission)
+documents/
+
+# Local notebooks and scratch files
+*.bak
+*.tmp
+*.local.*
