@@ -71,12 +71,12 @@ Configuration and submission.
 * `LICENSE`
 * `README.md`
 * `SUBMISSION.md`
-* `projects/frudgecare-ai/README.md`
-* `projects/frudgecare-ai/responsible-ai.md`
-* `projects/frudgecare-ai/team-contributions.md`
-* `projects/frudgecare-ai/src/README.md`
-* `projects/frudgecare-ai/demo/README.md`
-* `projects/frudgecare-ai/demo/demo-script.md`
+* `projects/McNeeseCodes_/README.md`
+* `projects/McNeeseCodes_/responsible-ai.md`
+* `projects/McNeeseCodes_/team-contributions.md`
+* `projects/McNeeseCodes_/src/README.md`
+* `projects/McNeeseCodes_/demo/README.md`
+* `projects/McNeeseCodes_/demo/demo-script.md`
 
 
 ### Key decisions
@@ -163,7 +163,7 @@ Owns the clinical knowledge that the retrieval layer searches against, the frami
 
 * The twelve entry inline clinical guideline corpus inside `services/ai-engine/main.py` under `CLINICAL_GUIDELINES`. Each entry is a short paraphrase of a public clinical heuristic with associated keywords for the matcher.
 * The framing of the AI Patient Triage idea and the choice of the four demo scenarios.
-* The three minute demo script in `projects/frudgecare-ai/demo/demo-script.md`. Reviewed for clarity and timing.
+* The three minute demo script in `projects/McNeeseCodes_/demo/demo-script.md`. Reviewed for clarity and timing.
 * The presentation slides used during demo day.
 * Will present the final demo to the judges.
 

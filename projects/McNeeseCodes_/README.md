@@ -223,7 +223,7 @@ Live deployment. The system runs locally. See Setup Instructions above.
 ## 7. Source Code
 
 
-The full source lives at the root of the repository. This `projects/frudgecare-ai/` folder is the hackathon submission entry. The actual code lives where the build tooling expects it.
+The full source lives at the root of the repository. This `projects/McNeeseCodes_/` folder is the hackathon submission entry. The actual code lives where the build tooling expects it.
 
 
 * `apps/web/` for the Next.js frontend
@@ -287,7 +287,7 @@ frudgeCareAI/
       knowledge_base/            Synthea FHIR, vital ranges, ICD-10 reference
 
   projects/
-    frudgecare-ai/               Hackathon submission folder
+    McNeeseCodes_/               Hackathon submission folder
       README.md                  This file
       responsible-ai.md          Required for all teams
       team-contributions.md      Who built what, with timestamps

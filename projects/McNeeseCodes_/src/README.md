@@ -31,7 +31,7 @@ This file is a one page index pointing at where each piece actually lives.
 ## Why the code is at the repository root and not inside this folder
 
 
-npm workspaces are declared in the root `package.json` with `"workspaces": ["apps/*", "services/*", "packages/*"]`. Moving the apps under `projects/frudgecare-ai/src/` would break the workspace resolver.
+npm workspaces are declared in the root `package.json` with `"workspaces": ["apps/*", "services/*", "packages/*"]`. Moving the apps under `projects/McNeeseCodes_/src/` would break the workspace resolver.
 
 
 FastAPI module imports in `services/ai-engine/main.py` use relative paths against the `services/ai-engine/` working directory.

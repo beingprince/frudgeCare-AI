@@ -15,11 +15,11 @@ The hard deadline is Sunday April 26 at 4 PM CDT, which is Monday April 27 at 2 
 Run through this once before opening the pull request.
 
 
-* The team members table in `projects/frudgecare-ai/README.md` has the GitHub handle column filled in for every member.
-* The Demo section in `projects/frudgecare-ai/README.md` has a real video link or a confirmation that the screenshots are enough.
-* `projects/frudgecare-ai/responsible-ai.md` reads cleanly and has no placeholders.
-* `projects/frudgecare-ai/team-contributions.md` reads cleanly and the timeline reflects what actually happened on the day.
-* `projects/frudgecare-ai/demo/` has the eight screenshots listed in the manifest.
+* The team members table in `projects/McNeeseCodes_/README.md` has the GitHub handle column filled in for every member.
+* The Demo section in `projects/McNeeseCodes_/README.md` has a real video link or a confirmation that the screenshots are enough.
+* `projects/McNeeseCodes_/responsible-ai.md` reads cleanly and has no placeholders.
+* `projects/McNeeseCodes_/team-contributions.md` reads cleanly and the timeline reflects what actually happened on the day.
+* `projects/McNeeseCodes_/demo/` has the eight screenshots listed in the manifest.
 * `npm run dev` starts both the web and the AI engine without errors on a clean clone.
 * `http://localhost:3000/triage` runs the Sepsis scenario end to end.
 * `http://localhost:3000/console` loads all four tabs.
@@ -45,7 +45,7 @@ If the output is empty, add the remote.
 
 
 ```bash
-git remote add origin https://github.com/beingprince/frudgeCare-AI.git
+git remote add origin https://github.com/beingprince/McNeeseCodes_.git
 git branch -m master main
 git push -u origin main
 ```
@@ -79,7 +79,7 @@ cd hackathon-2026-projects
 ## 4. Step Three. Copy the FrudgeCare AI Submission Folder
 
 
-From inside the clone of the template fork, copy the `projects/frudgecare-ai/` folder out of the FrudgeCare AI repository.
+From inside the clone of the template fork, copy the `projects/McNeeseCodes_/` folder out of the FrudgeCare AI repository.
 
 
 On macOS or Linux.
@@ -87,7 +87,7 @@ On macOS or Linux.
 
 ```bash
 mkdir -p projects
-cp -R ../frudgeCareAI/projects/frudgecare-ai projects/
+cp -R ../frudgeCareAI/projects/McNeeseCodes_ projects/
 ```
 
 
@@ -96,7 +96,7 @@ On Windows PowerShell.
 
 ```powershell
 New-Item -ItemType Directory -Force -Path projects | Out-Null
-Copy-Item -Recurse -Force ..\frudgeCareAI\projects\frudgecare-ai projects\
+Copy-Item -Recurse -Force ..\frudgeCareAI\projects\McNeeseCodes_ projects\
 ```
 
 
@@ -106,7 +106,7 @@ The result inside the template fork must look like the following.
 ```
 hackathon-2026-projects/         the organiser template, the team fork
   projects/
-    frudgecare-ai/
+    McNeeseCodes_/
       README.md
       responsible-ai.md
       team-contributions.md
@@ -122,7 +122,7 @@ hackathon-2026-projects/         the organiser template, the team fork
 The `src/README.md` inside the submission folder explains that the full source code lives in the team's working repository from Section 2 and links to it. This is the cleanest way to handle a large mono repository without breaking the build tooling.
 
 
-If the team prefers, the actual source code can also go inside `projects/frudgecare-ai/src/` by copying `apps/`, `services/`, and the root configuration files in there. The team does not recommend it. The npm workspace declaration and the FastAPI imports both expect the code at the repository root, and judges can clone the working repository from the URL in the README in any case.
+If the team prefers, the actual source code can also go inside `projects/McNeeseCodes_/src/` by copying `apps/`, `services/`, and the root configuration files in there. The team does not recommend it. The npm workspace declaration and the FastAPI imports both expect the code at the repository root, and judges can clone the working repository from the URL in the README in any case.
 
 
 
@@ -134,10 +134,10 @@ From inside the template fork.
 
 
 ```bash
-git checkout -b submit/frudgecare-ai
-git add projects/frudgecare-ai
+git checkout -b submit/McNeeseCodes_
+git add projects/McNeeseCodes_
 git commit -m "Submission: FrudgeCare AI by team McNeeseCodes_"
-git push -u origin submit/frudgecare-ai
+git push -u origin submit/McNeeseCodes_
 ```
 
 
@@ -150,7 +150,7 @@ Then on GitHub.
 2. Click Pull requests, then New pull request.
 
 
-3. Click Compare across forks. Pick the team fork and the `submit/frudgecare-ai` branch.
+3. Click Compare across forks. Pick the team fork and the `submit/McNeeseCodes_` branch.
 
 
 4. Use this exact pull request title format. The organiser requires it.
@@ -167,11 +167,11 @@ Then on GitHub.
    ```
    Track. AI Patient Triage.
 
-   Project README. ./projects/frudgecare-ai/README.md
-   Responsible AI document. ./projects/frudgecare-ai/responsible-ai.md
-   Team contributions. ./projects/frudgecare-ai/team-contributions.md
-   Demo. ./projects/frudgecare-ai/demo/demo-script.md
-   Source code repository. https://github.com/beingprince/frudgeCare-AI
+   Project README. ./projects/McNeeseCodes_/README.md
+   Responsible AI document. ./projects/McNeeseCodes_/responsible-ai.md
+   Team contributions. ./projects/McNeeseCodes_/team-contributions.md
+   Demo. ./projects/McNeeseCodes_/demo/demo-script.md
+   Source code repository. https://github.com/beingprince/McNeeseCodes_
 
    Team McNeeseCodes_.
    - Prince Pudasaini, Team Lead, Full Stack Engineer, AI Engineer, @beingprince
@@ -212,9 +212,9 @@ From the participant resources, all four are mandatory. Missing any one disquali
 | Deliverable | Where the team submission has it |
 | ----------- | -------------------------------- |
 | GitHub repository with frequent meaningful commits | The team working repository from Section 2 |
-| README with Problem, Approach, Architecture, Data sources, Limitations, Setup, Team | `projects/frudgecare-ai/README.md` |
-| Three minute demo, live or recorded | `projects/frudgecare-ai/demo/demo-script.md` plus the screenshots |
-| Responsible AI document | `projects/frudgecare-ai/responsible-ai.md` |
+| README with Problem, Approach, Architecture, Data sources, Limitations, Setup, Team | `projects/McNeeseCodes_/README.md` |
+| Three minute demo, live or recorded | `projects/McNeeseCodes_/demo/demo-script.md` plus the screenshots |
+| Responsible AI document | `projects/McNeeseCodes_/responsible-ai.md` |
 
 
 The README must include Project Name, Team Members with names and GitHub handles, Problem Statement, Solution, Tech Stack, Setup Instructions, and Demo. All seven are present in the team README.

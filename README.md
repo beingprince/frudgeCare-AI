@@ -4,7 +4,7 @@
 A patient walks in, types their symptoms once, and the system produces a ready to action plan for the front desk, the nurse, and the provider at the same time. Built by team McNeeseCodes_ for the CareDevi AI Healthcare Innovation Hackathon 2026 under the AI Patient Triage track.
 
 
-The full hackathon submission lives at `projects/frudgecare-ai/`. The actual application code lives in `apps/web/` and `services/ai-engine/` so that the build tooling works without symlinks.
+The full hackathon submission lives at `projects/McNeeseCodes_/`. The actual application code lives in `apps/web/` and `services/ai-engine/` so that the build tooling works without symlinks.
 
 
 
@@ -20,7 +20,7 @@ The full hackathon submission lives at `projects/frudgecare-ai/`. The actual app
 | Solida Tan | RAG Dataset Curation, Idea Development, Presentation |
 
 
-A more detailed breakdown of who built what is in `projects/frudgecare-ai/team-contributions.md`.
+A more detailed breakdown of who built what is in `projects/McNeeseCodes_/team-contributions.md`.
 
 
 
@@ -95,7 +95,7 @@ services/
                                 ranges, ICD-10 code reference data
 
 projects/
-  frudgecare-ai/                Hackathon submission folder
+  McNeeseCodes_/                Hackathon submission folder
     README.md                   Project overview judges read first
     responsible-ai.md           Required for all teams
     team-contributions.md       Who built what, with timestamps
