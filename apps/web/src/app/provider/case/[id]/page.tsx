@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import type { CaseStatus } from "@/lib/caseStateMachine";
 import { CaseHeader } from "@/components/shared/CaseHeader";
 import { type TimelineEvent } from "@/components/shared/CaseTimeline";
 import { StatusChip } from "@/components/shared/StatusChip";
@@ -73,6 +74,12 @@ export default function ProviderCaseReview() {
   const [decision, setDecision] = useState<ProviderDecision | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [escalationSent, setEscalationSent] = useState(false);
+  /** When the user clicks Edit on the receipt, don't immediately re-apply a server-backed decision. */
+  const userDismissedReceipt = useRef(false);
+
+  useEffect(() => {
+    userDismissedReceipt.current = false;
+  }, [caseId]);
 
   useEffect(() => {
     if (!caseId) return;
@@ -93,23 +100,25 @@ export default function ProviderCaseReview() {
     };
   }, [caseId]);
 
-  // load any saved decision on the client after mount. This reads from
-  // localStorage, which is a browser-only API, so the effect is the correct
-  // place — not the show on screen body (server-side loading would mismatch) and not useSyncExternalStore
-  // (overkill for a one-shot read in mock mode).
-  //
-  // We try both the URL caseId (which may be a case_code like FC-C-ABC123)
-  // and the loaded view.id (always the UUID) so a refresh by either key
-  // surfaces the previously-signed receipt.
+  // Prefer `ai_patient_profile.provider_decision` from the case API, then
+  // localStorage (same keys as getDecision: case_code or uuid).
   useEffect(() => {
-    if (!caseId) return;
-    const fromUrl = getDecision(caseId);
-    if (fromUrl) {
-      setDecision(fromUrl);
+    if (!view) return;
+    const fromServer = view.hydratedProviderDecision ?? null;
+    const fromLocal = getDecision(caseId) ?? (view.id ? getDecision(view.id) : null);
+    if (userDismissedReceipt.current) {
+      if (fromLocal) setDecision(fromLocal);
+      else if (!fromServer) setDecision(null);
       return;
     }
-    if (view?.id) setDecision(getDecision(view.id));
-  }, [caseId, view?.id]);
+    if (fromServer) {
+      setDecision(fromServer);
+    } else if (fromLocal) {
+      setDecision(fromLocal);
+    } else {
+      setDecision(null);
+    }
+  }, [view, caseId]);
 
   // Auto-hide the escalation-sent banner on the not-cleared gate.
   useEffect(() => {
@@ -406,46 +415,95 @@ export default function ProviderCaseReview() {
     try {
       await saveDecision(signed);
 
-      // Advance the case state machine. Best-effort: a transition
-      // failure (already-advanced, missing FK, etc.) shouldn't lose the
-      // signed receipt that the provider just authored.
-      try {
-        await fetch("/api/cases/transition", {
+      // Mirror the patient-facing portion of the decision into the case
+      // live store so /patient/status surfaces it without a refresh. We
+      // skip the encounter note (clinical-only) and only forward the
+      // explicit "patient update" field the provider authored.
+      if (payload.patientUpdate?.trim()) {
+        try {
+          await fetch(`/api/cases/${encodeURIComponent(view.id)}/cascade`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              note: {
+                authorRole: "provider",
+                authorLabel: CURRENT_PROVIDER.name,
+                body: payload.patientUpdate.trim(),
+                patientVisible: true,
+              },
+            }),
+          });
+        } catch (e) {
+          console.warn("[provider/case] live-update mirror failed:", e);
+        }
+      }
+
+      // Advance the case FSM from the **actual** row status, then refresh the view
+      // so the header, timeline, and nurse data match Supabase.
+      const st = (view.serverStatus as CaseStatus) || "provider_review_pending";
+      const postTransition = async (
+        from_status: CaseStatus,
+        to_status: CaseStatus,
+        event_type: string,
+        metadata?: Record<string, unknown>,
+      ) => {
+        const r = await fetch("/api/cases/transition", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             case_id: view.id,
-            from_status: "provider_review_pending",
-            to_status: "provider_action_issued",
+            from_status,
+            to_status,
             actor_id: CURRENT_PROVIDER.id,
-            event_type: "provider.decision_signed",
-            metadata: { action: payload.nextAction },
+            event_type,
+            ...(metadata ? { metadata } : {}),
           }),
         });
+        if (!r.ok) {
+          const err = await r.text();
+          console.warn(
+            `[provider/case] transition ${from_status}→${to_status} ${r.status}:`,
+            err,
+          );
+        }
+        return r.ok;
+      };
+      try {
+        if (st === "provider_review_pending") {
+          await postTransition(
+            "provider_review_pending",
+            "provider_action_issued",
+            "provider.decision_signed",
+            { action: payload.nextAction },
+          );
+        }
         if (payload.nextAction === "close_and_discharge") {
-          await fetch("/api/cases/transition", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              case_id: view.id,
-              from_status: "provider_action_issued",
-              to_status: "disposition_finalized",
-              actor_id: CURRENT_PROVIDER.id,
-              event_type: "provider.case_closed",
-            }),
-          });
+          await postTransition(
+            "provider_action_issued",
+            "disposition_finalized",
+            "provider.case_closed",
+          );
         }
       } catch (e) {
         console.warn("[provider/case] transition failed (decision still saved):", e);
       }
 
+      userDismissedReceipt.current = false;
       setDecision(signed);
+      const fresh = await loadProviderCaseView(view.id);
+      if (fresh) {
+        setView(fresh);
+        if (fresh.hydratedProviderDecision) {
+          setDecision(fresh.hydratedProviderDecision);
+        }
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
   function handleEdit() {
+    userDismissedReceipt.current = true;
     clearDecision(caseId);
     if (view?.id) clearDecision(view.id);
     setDecision(null);
@@ -461,11 +519,15 @@ export default function ProviderCaseReview() {
             patientName={view.patient.fullName}
             demographics={view.patient.demographics}
             urgency={view.caseMeta.urgency}
-            currentState="Closed"
+            currentState={view.caseMeta.currentState}
             nextOwnerRole=""
-            waitingOn="Decision signed"
+            waitingOn={
+              decision.nextAction === "close_and_discharge"
+                ? "Case closed"
+                : "Decision signed — routed per action"
+            }
             appointmentStatus={view.caseMeta.appointmentStatus}
-            lastUpdated="Just now"
+            lastUpdated={view.caseMeta.lastUpdated}
             actionButtons={
               <button
                 type="button"

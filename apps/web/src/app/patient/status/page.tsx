@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { SourceTierBadge } from "@/components/shared/ProvenanceBadges";
 import { useToast } from "@/components/shared/Toast";
 import type { Case, AIPatientProfile, CaseStatus } from "@/types";
+import type { CascadeData, ProviderNote } from "@/lib/cascade-types";
 import { downloadIntakeReceipt } from "@/lib/intake-receipt";
 import { formatPhoneWithCountry } from "@/lib/country-codes";
 import { ROLE_HOME } from "@/lib/role-routes";
@@ -268,6 +269,14 @@ function PatientStatusInner() {
   const [caseData, setCaseData] = useState<Case | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(Boolean(caseId));
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Live updates from the care team. Polled from /api/cases/[caseId]/cascade
+  // every ~5s while the page is open. Supports the new flow where the
+  // nurse runs the cascade from /nurse/case/[caseId] and provider notes
+  // flagged "patient_visible" land here without a refresh.
+  const [cascadeLive, setCascadeLive] = useState<CascadeData | null>(null);
+  const [providerNotes, setProviderNotes] = useState<ProviderNote[]>([]);
+  const [careTeamUpdatedAt, setCareTeamUpdatedAt] = useState<string | null>(null);
   const [session, setSession] = useState<{
     role: string;
     name: string;
@@ -323,6 +332,65 @@ function PatientStatusInner() {
       cancelled = true;
     };
   }, [caseId, router, session]);
+
+  // Poll the per-case cascade store on a 5-second interval. The store
+  // holds (a) the AI cascade payload the nurse runs from her workspace
+  // and (b) provider notes flagged as patient-visible. We dedupe with a
+  // signature so React only re-renders when something actually changed.
+  useEffect(() => {
+    if (!caseId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastSig = "";
+
+    async function pollOnce() {
+      try {
+        const r = await fetch(
+          `/api/cases/${encodeURIComponent(caseId!)}/cascade`,
+          { cache: "no-store" },
+        );
+        if (!r.ok) return;
+        const json = (await r.json()) as {
+          cascade: { queue: CascadeData["queue"]; nurse: CascadeData["nurse"]; provider: CascadeData["provider"]; totalMs?: number } | null;
+          providerNotes: ProviderNote[];
+          updatedAt: string | null;
+        };
+        if (cancelled) return;
+        const sig = JSON.stringify({
+          cascade: json.cascade,
+          notes: json.providerNotes?.map((n) => n.id),
+          updatedAt: json.updatedAt,
+        });
+        if (sig === lastSig) return;
+        lastSig = sig;
+        if (json.cascade) {
+          setCascadeLive({
+            queue: json.cascade.queue,
+            nurse: json.cascade.nurse,
+            provider: json.cascade.provider,
+            totalMs: json.cascade.totalMs,
+          });
+        }
+        setProviderNotes(json.providerNotes ?? []);
+        setCareTeamUpdatedAt(json.updatedAt);
+      } catch {
+        /* polling is best-effort — silent on transient failures */
+      }
+    }
+
+    function loop() {
+      pollOnce().finally(() => {
+        if (cancelled) return;
+        timer = setTimeout(loop, 5000);
+      });
+    }
+
+    loop();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [caseId]);
 
   useEffect(() => {
     if (!caseId) {
@@ -758,6 +826,16 @@ function PatientStatusInner() {
                 </div>
               </section>
 
+              {/* Live updates from the care team — feeds the patient real
+                  provider notes + cascade insights as they're saved upstream. */}
+              {(cascadeLive || providerNotes.length > 0) && (
+                <CareTeamLiveSection
+                  cascade={cascadeLive}
+                  providerNotes={providerNotes.filter((n) => n.patientVisible)}
+                  updatedAt={careTeamUpdatedAt}
+                />
+              )}
+
               {/* Tasks */}
               <section className="order-5 w-full border-b border-slate-200/60" aria-labelledby="tasks-heading">
                 <div className="border-b border-slate-100/90 bg-slate-50/40 px-4 py-2.5 sm:px-6">
@@ -1127,6 +1205,194 @@ function AIProfileSection({
       )}
     </section>
   );
+}
+
+function CareTeamLiveSection({
+  cascade,
+  providerNotes,
+  updatedAt,
+}: {
+  cascade: CascadeData | null;
+  providerNotes: ProviderNote[];
+  updatedAt: string | null;
+}) {
+  const lastUpdate = updatedAt ? formatLiveTimestamp(updatedAt) : null;
+  return (
+    <section
+      className="order-[4.5] w-full border-b border-slate-200/60 bg-white px-4 py-4 sm:px-6 sm:py-5"
+      aria-labelledby="care-team-live-heading"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#0F4C81]">
+            Live updates from your care team
+          </p>
+          <h3
+            id="care-team-live-heading"
+            className="mt-0.5 text-[15px] font-semibold text-slate-900 sm:text-[16px]"
+          >
+            New activity on your case
+          </h3>
+        </div>
+        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+          <span
+            className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500"
+            aria-hidden
+          />
+          <span>{lastUpdate ? `Updated ${lastUpdate}` : "Watching for updates…"}</span>
+        </div>
+      </div>
+
+      {providerNotes.length > 0 && (
+        <>
+          <hr className="my-4 border-t border-slate-100" />
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+              Notes from your care team
+            </p>
+            <ul className="mt-2 flex flex-col divide-y divide-slate-100">
+              {providerNotes
+                .slice()
+                .reverse()
+                .map((n) => (
+                  <li key={n.id} className="py-2 first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      <span className="text-[#0F4C81]">{n.authorLabel}</span>
+                      <span aria-hidden>·</span>
+                      <span>{providerRoleLabel(n.authorRole)}</span>
+                      <span aria-hidden>·</span>
+                      <span className="font-normal lowercase tracking-normal text-slate-400">
+                        {formatLiveTimestamp(n.createdAt)}
+                      </span>
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-[13.5px] leading-relaxed text-slate-800">
+                      {n.body}
+                    </p>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        </>
+      )}
+
+      {cascade && (
+        <>
+          <hr className="my-4 border-t border-slate-100" />
+          <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-3 md:divide-x md:divide-slate-100">
+            <LiveColumn
+              eyebrow="Care queue"
+              tier={cascade.queue.source_tier}
+              empty="No queue alerts."
+              className="md:pr-6"
+            >
+              {cascade.queue.bottleneck_alerts.length > 0 ? (
+                <ul className="space-y-1">
+                  {cascade.queue.bottleneck_alerts.slice(0, 3).map((a, i) => (
+                    <li key={i} className="text-[12px] text-[#B45309]">
+                      {a}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </LiveColumn>
+
+            <LiveColumn
+              eyebrow="Questions your nurse may ask"
+              tier={cascade.nurse.source_tier}
+              empty="No suggested questions yet."
+              className="md:px-6"
+            >
+              {cascade.nurse.suggested_questions.length > 0 ? (
+                <ul className="space-y-1 text-[12px] text-slate-700">
+                  {cascade.nurse.suggested_questions.slice(0, 3).map((q, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <span
+                        className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[#0F4C81]"
+                        aria-hidden
+                      />
+                      <span>{q}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </LiveColumn>
+
+            <LiveColumn
+              eyebrow="What your team is considering"
+              tier={cascade.provider.source_tier}
+              empty="Provider review pending."
+              className="md:pl-6"
+            >
+              {cascade.provider.differential_dx.length > 0 ? (
+                <ul className="space-y-1 text-[12px]">
+                  {cascade.provider.differential_dx.slice(0, 3).map((d, i) => (
+                    <li key={i} className="text-slate-700">
+                      <span className="font-semibold text-slate-900">{d.diagnosis}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </LiveColumn>
+          </div>
+        </>
+      )}
+
+      {cascade?.provider.disclaimer && (
+        <p className="mt-3 text-[11px] italic text-slate-500">
+          {cascade.provider.disclaimer}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function LiveColumn({
+  eyebrow,
+  tier,
+  empty,
+  className,
+  children,
+}: {
+  eyebrow: string;
+  tier: number;
+  empty: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const hasContent =
+    React.Children.toArray(children).filter((c) => c != null).length > 0;
+  return (
+    <div className={cn("min-w-0", className)}>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">
+          {eyebrow}
+        </span>
+        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-slate-600">
+          T{tier}
+        </span>
+      </div>
+      {hasContent ? children : (
+        <p className="text-[11.5px] text-slate-400">{empty}</p>
+      )}
+    </div>
+  );
+}
+
+function providerRoleLabel(role: ProviderNote["authorRole"]): string {
+  if (role === "nurse") return "Nurse";
+  if (role === "provider") return "Provider";
+  return "Front desk";
+}
+
+function formatLiveTimestamp(iso: string): string {
+  const d = new Date(iso);
+  const diffMs = Date.now() - d.getTime();
+  const m = Math.floor(diffMs / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hr ago`;
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 function ProfileBulletBlock({

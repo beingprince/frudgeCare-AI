@@ -46,9 +46,16 @@ type CommunityResponse = {
 export function CommunityPanel({
   narrative,
   className = "",
+  flat = false,
 }: {
   narrative: string;
   className?: string;
+  /**
+   * When true, renders as a flat content section (no card chrome). Used
+   * inside the consolidated CarePlanCard on /triage. When false (default),
+   * renders as a standalone card.
+   */
+  flat?: boolean;
 }) {
   const [data, setData] = useState<CommunityResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -95,49 +102,39 @@ export function CommunityPanel({
   const offline = data?.source === "offline" && (data?.results?.length ?? 0) === 0;
   if (offline) return null;
 
-  return (
-    <section
-      className={`rounded-[14px] border border-slate-200 bg-white p-5 shadow-[0_2px_4px_rgba(0,0,0,0.04)] ${className}`}
-      aria-label="Similar discussions on Reddit"
-    >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-[14px] font-semibold tracking-tight text-slate-900">
-            Similar conversations on Reddit
-          </h3>
-          <p className="mt-0.5 text-[12px] leading-snug text-slate-500">
-            Read-only matches from{" "}
-            {(data?.subreddits ?? ["AskDocs", "medicine", "HealthAnxiety"]).map((s, i, arr) => (
-              <span key={s}>
-                <span className="font-mono text-[11px]">r/{s}</span>
-                {i < arr.length - 1 ? ", " : ""}
-              </span>
-            ))}
-            . Public threads only — not medical advice.
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+  const body = (
+    <>
+      <div className="flex items-baseline justify-between gap-3 mb-3">
+        <h3 className="fc-section-title">Similar conversations on Reddit</h3>
+        <span className="inline-flex items-center h-5 px-2 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-medium uppercase tracking-wider text-slate-600">
           {loading ? "Searching…" : data?.source === "cache" ? "Cached" : data?.source ?? "live"}
         </span>
       </div>
+      <p className="mb-3 text-[12px] leading-snug text-slate-500 max-w-[560px]">
+        Read-only matches from{" "}
+        {(data?.subreddits ?? ["AskDocs", "medicine", "HealthAnxiety"]).map((s, i, arr) => (
+          <span key={s}>
+            <span className="font-mono text-[11px]">r/{s}</span>
+            {i < arr.length - 1 ? ", " : ""}
+          </span>
+        ))}
+        . Public threads only — not medical advice.
+      </p>
 
       {error ? (
-        <div className="rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+        <p className="inline-block fc-highlight-warn pl-3 py-1 text-[12px] text-slate-700">
           Couldn&apos;t load community posts: {error}
-        </div>
+        </p>
       ) : loading && !data ? (
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[78px] animate-pulse rounded-[10px] border border-slate-100 bg-slate-50"
-            />
+            <div key={i} className="fc-skeleton h-[78px] w-full rounded-[var(--radius-control)]" />
           ))}
         </div>
       ) : (data?.results?.length ?? 0) === 0 ? (
-        <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+        <p className="text-[12px] text-slate-500">
           No close matches in the last year. Try a more specific symptom phrase.
-        </div>
+        </p>
       ) : (
         <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {data!.results.map((post) => (
@@ -146,10 +143,10 @@ export function CommunityPanel({
                 href={post.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block h-full rounded-[10px] border border-slate-200 bg-white p-3 transition hover:border-[#0F4C81] hover:shadow-sm"
+                className="fc-focus-ring block h-full rounded-[var(--radius-control)] border border-slate-200 bg-white p-3 transition hover:border-[var(--primary)] hover:shadow-sm"
               >
-                <div className="flex items-center justify-between gap-2 text-[10px] font-medium uppercase tracking-wide">
-                  <span className="text-[#0F4C81]">r/{post.subreddit}</span>
+                <div className="flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-wider">
+                  <span className="text-[var(--primary)]">r/{post.subreddit}</span>
                   <span
                     className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600"
                     title="Token-overlap similarity to your narrative"
@@ -165,9 +162,9 @@ export function CommunityPanel({
                     {post.snippet}
                   </p>
                 ) : null}
-                <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
+                <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500">
                   <span>{post.score} pts</span>
-                  <span>·</span>
+                  <span aria-hidden="true">·</span>
                   <span>{post.num_comments} comments</span>
                 </div>
               </a>
@@ -175,6 +172,22 @@ export function CommunityPanel({
           ))}
         </ul>
       )}
+    </>
+  );
+
+  if (flat) {
+    return (
+      <div className={className} aria-label="Similar discussions on Reddit">
+        {body}
+      </div>
+    );
+  }
+  return (
+    <section
+      className={`fc-card p-5 ${className}`}
+      aria-label="Similar discussions on Reddit"
+    >
+      {body}
     </section>
   );
 }

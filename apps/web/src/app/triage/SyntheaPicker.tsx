@@ -107,26 +107,24 @@ export function SyntheaPicker({
   };
 
   return (
-    <div className={`mb-4 rounded-[12px] border border-emerald-200 bg-emerald-50/60 p-3 ${className}`}>
+    <section className={className}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-100 text-emerald-700">
-            <Database size={14} />
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--radius-chip)] bg-[#ECFDF5] text-[#047857]">
+            <Database size={12} />
           </span>
-          <div className="leading-tight">
-            <div className="text-[12px] font-bold text-emerald-900">
-              Or use a real Synthea patient
-            </div>
-            <div className="text-[10.5px] text-emerald-700">
-              FHIR R4 · synthea.mitre.org · 10 curated demo cases · no PHI
+          <div className="leading-tight min-w-0">
+            <div className="fc-eyebrow">Or load a Synthea patient</div>
+            <div className="text-[10.5px] text-slate-500 truncate">
+              FHIR R4 · 10 curated cases · no PHI
             </div>
           </div>
         </div>
         {loading ? (
-          <Loader2 size={14} className="animate-spin text-emerald-700" />
+          <Loader2 size={13} className="animate-spin text-slate-400" />
         ) : (
-          <span className="hidden md:inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-            <UserCheck size={11} /> {patients.length} loaded
+          <span className="hidden md:inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-semibold text-[#047857]">
+            <UserCheck size={10} /> {patients.length} loaded
           </span>
         )}
       </div>
@@ -151,7 +149,7 @@ export function SyntheaPicker({
           ))}
         </select>
       )}
-    </div>
+    </section>
   );
 }
 

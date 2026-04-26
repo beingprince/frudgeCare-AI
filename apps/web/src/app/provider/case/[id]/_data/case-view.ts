@@ -14,6 +14,7 @@
 
 import type { Vital } from "@/components/shared/VitalsGrid";
 import { getMockCaseById, MOCK_CASES } from "@/lib/mock-service";
+import type { NextAction, ProviderDecision } from "./decisions";
 
 // ─── View model ──────────────────────────────────────────────────────────
 //
@@ -103,6 +104,10 @@ export type ProviderCaseView = {
   timeline: TimelineEventData[];
   handoffChecklist: HandoffItem[];
   nurseOwner: { name: string; pickedUpAt: string };
+  /** Canonical `cases.status` for API transitions; keep in sync with Supabase. */
+  serverStatus: string;
+  /** `ai_patient_profile.provider_decision` when the case was signed in another session. */
+  hydratedProviderDecision?: ProviderDecision | null;
 };
 
 // ─── Mock dataset — mock-001 (rich) ──────────────────────────────────────
@@ -213,6 +218,7 @@ const MOCK_001: ProviderCaseView = {
     { id: "brief",         label: "Handoff brief confirmed by nurse",     done: true  },
   ],
   nurseOwner: { name: "Nurse M. Ortega", pickedUpAt: "09:14" },
+  serverStatus: "provider_review_pending",
 };
 
 // Future cases can be added here. When Supabase comes online, replace
@@ -318,6 +324,16 @@ function buildViewFromMockCase(id: string): ProviderCaseView | null {
       { id: "brief",         label: "Handoff brief confirmed by nurse",     done: isTriageCleared },
     ],
     nurseOwner: { name: "Nurse on duty", pickedUpAt: "—" },
+    serverStatus: (() => {
+      const fsm = new Set([
+        "intake_submitted", "ai_pretriage_ready", "frontdesk_review", "nurse_triage_pending",
+        "nurse_triage_in_progress", "nurse_validated", "provider_review_pending",
+        "provider_action_issued", "disposition_finalized",
+      ]);
+      const s = String(raw.status ?? "");
+      if (fsm.has(s)) return s;
+      return isTriageCleared ? "provider_review_pending" : "nurse_triage_in_progress";
+    })(),
   };
 }
 
@@ -410,6 +426,95 @@ type NurseAssessmentRecord = {
   };
 };
 
+const CANONICAL_NEXT_ACTIONS: NextAction[] = [
+  "order_in_clinic_test",
+  "prescribe_medication",
+  "refer_to_specialist",
+  "close_and_discharge",
+];
+
+function isNextAction(v: string): v is NextAction {
+  return (CANONICAL_NEXT_ACTIONS as string[]).includes(v);
+}
+
+/**
+ * Unwrap mixed JSON from nurse POST bodies (string arrays, comma strings,
+ * or checkbox maps) so the provider panel always gets arrays to render.
+ */
+function toStringList(v: unknown): string[] {
+  if (v == null) return [];
+  if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof v === "string" && v.trim()) {
+    return v
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (typeof v === "object") {
+    return Object.entries(v as Record<string, unknown>)
+      .filter(([, on]) => on === true || on === "true" || on === 1)
+      .map(([k]) => k);
+  }
+  return [];
+}
+
+function normalizeNurseRecord(
+  n: NurseAssessmentRecord | null | undefined,
+  riskyFlagsRow: string[] | null | undefined,
+): NurseAssessmentRecord | null {
+  if (!n) return null;
+  const a = toStringList(n.associated_symptoms);
+  const d = toStringList(n.denied_symptoms);
+  let red = toStringList(n.red_flags_checked);
+  if (red.length === 0) red = toStringList(riskyFlagsRow);
+  return { ...n, associated_symptoms: a, denied_symptoms: d, red_flags_checked: red };
+}
+
+function tryParseProfileNurse(
+  profile: Record<string, unknown> | null,
+): NurseAssessmentRecord | null {
+  if (!profile || typeof profile !== "object") return null;
+  const raw = profile.nurse_assessment;
+  if (raw == null) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as NurseAssessmentRecord;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw === "object") return raw as NurseAssessmentRecord;
+  return null;
+}
+
+function providerDecisionFromProfile(
+  caseId: string,
+  profile: Record<string, unknown> | null,
+): ProviderDecision | null {
+  if (!profile) return null;
+  const raw = profile.provider_decision;
+  if (!raw || typeof raw !== "object") return null;
+  const pd = raw as Record<string, unknown>;
+  const action = typeof pd.action === "string" ? pd.action : "";
+  if (!isNextAction(action) || typeof pd.signed_at !== "string") return null;
+  return {
+    caseId,
+    providerId: String(pd.provider_id ?? "usr_pr_001"),
+    providerName: typeof pd.provider_name === "string" && pd.provider_name
+      ? pd.provider_name
+      : "Provider",
+    nextAction: action,
+    encounterNote: typeof pd.encounter_note === "string" ? pd.encounter_note : "",
+    patientUpdate:
+      pd.patient_update == null
+        ? null
+        : typeof pd.patient_update === "string"
+          ? pd.patient_update
+          : String(pd.patient_update),
+    signedAt: pd.signed_at,
+  };
+}
+
 function mapUrgency(u: string | null | undefined): "Routine" | "Urgent" | "Emergency" {
   if (u === "high" || u === "Emergency" || u === "URGENT" || u === "CRITICAL") return "Emergency";
   if (u === "medium" || u === "Urgent" || u === "SEMI-URGENT") return "Urgent";
@@ -442,42 +547,44 @@ function buildVitalsFromAssessment(na: NurseAssessmentRecord | null): Vital[] {
     ? new Date(na.validated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "—";
 
-  const bpStr =
-    v.bpSys && v.bpDia ? `${v.bpSys} / ${v.bpDia}` : v.bpSys ? String(v.bpSys) : "";
-  if (bpStr) {
-    const sys = Number(v.bpSys);
-    const dia = Number(v.bpDia);
-    const abnormalBp =
-      (Number.isFinite(sys) && (sys >= 140 || sys < 90)) ||
-      (Number.isFinite(dia) && (dia >= 90 || dia < 60));
-    vitals.push({
-      id: "bp", label: "Blood pressure", value: bpStr, unit: "mmHg",
-      abnormal: abnormalBp, takenAt: at,
-    });
-  }
-  if (v.hr) {
-    const hr = Number(v.hr);
-    vitals.push({
-      id: "hr", label: "Heart rate", value: String(v.hr), unit: "bpm",
-      abnormal: Number.isFinite(hr) && (hr > 100 || hr < 50),
-      takenAt: at,
-    });
-  }
-  if (v.tempF) {
-    const t = Number(v.tempF);
-    vitals.push({
-      id: "temp", label: "Temperature", value: String(v.tempF), unit: "°F",
-      abnormal: Number.isFinite(t) && (t >= 100.4 || t <= 95),
-      takenAt: at,
-    });
-  }
-  if (v.spo2) {
-    const s = Number(v.spo2);
-    vitals.push({
-      id: "spo2", label: "SpO\u2082", value: String(v.spo2), unit: "%",
-      abnormal: Number.isFinite(s) && s < 92,
-      takenAt: at,
-    });
+  if (v) {
+    const bpStr =
+      v.bpSys && v.bpDia ? `${v.bpSys} / ${v.bpDia}` : v.bpSys ? String(v.bpSys) : "";
+    if (bpStr) {
+      const sys = Number(v.bpSys);
+      const dia = Number(v.bpDia);
+      const abnormalBp =
+        (Number.isFinite(sys) && (sys >= 140 || sys < 90)) ||
+        (Number.isFinite(dia) && (dia >= 90 || dia < 60));
+      vitals.push({
+        id: "bp", label: "Blood pressure", value: bpStr, unit: "mmHg",
+        abnormal: abnormalBp, takenAt: at,
+      });
+    }
+    if (v.hr) {
+      const hr = Number(v.hr);
+      vitals.push({
+        id: "hr", label: "Heart rate", value: String(v.hr), unit: "bpm",
+        abnormal: Number.isFinite(hr) && (hr > 100 || hr < 50),
+        takenAt: at,
+      });
+    }
+    if (v.tempF) {
+      const t = Number(v.tempF);
+      vitals.push({
+        id: "temp", label: "Temperature", value: String(v.tempF), unit: "°F",
+        abnormal: Number.isFinite(t) && (t >= 100.4 || t <= 95),
+        takenAt: at,
+      });
+    }
+    if (v.spo2) {
+      const s = Number(v.spo2);
+      vitals.push({
+        id: "spo2", label: "SpO\u2082", value: String(v.spo2), unit: "%",
+        abnormal: Number.isFinite(s) && s < 92,
+        takenAt: at,
+      });
+    }
   }
   if (notTaken && !v?.bpSys && !v?.hr) {
     vitals.push({
@@ -530,11 +637,13 @@ function relativeAgo(iso: string | null | undefined): string {
 }
 
 function buildViewFromApiCase(row: ApiCaseRow): ProviderCaseView {
-  const profile = row.ai_patient_profile ?? null;
-  const nurse: NurseAssessmentRecord | null =
-    profile && typeof profile === "object" && "nurse_assessment" in profile
-      ? (profile.nurse_assessment as NurseAssessmentRecord)
+  const profile =
+    row.ai_patient_profile && typeof row.ai_patient_profile === "object"
+      ? (row.ai_patient_profile as Record<string, unknown>)
       : null;
+  const rawNurse = tryParseProfileNurse(profile);
+  const nurse = normalizeNurseRecord(rawNurse, row.risky_flags);
+  const provDecision = profile ? providerDecisionFromProfile(row.id, profile) : null;
 
   const status = row.status ?? "intake_submitted";
   // Provider workspace should unlock as soon as the triage nurse has
@@ -562,7 +671,7 @@ function buildViewFromApiCase(row: ApiCaseRow): ProviderCaseView {
   const redFlags = nurse?.red_flags_checked ?? row.risky_flags ?? [];
   const meds = (() => {
     if (!profile) return [] as { name: string; dose: string }[];
-    const px = (profile as Record<string, unknown>).extracted_medications;
+    const px = profile.extracted_medications;
     if (!Array.isArray(px)) return [];
     return px
       .map((m: unknown) => {
@@ -600,6 +709,17 @@ function buildViewFromApiCase(row: ApiCaseRow): ProviderCaseView {
       isAbnormal: redFlags.length > 0,
     });
   }
+  if (provDecision) {
+    timeline.push({
+      id: "t-provider-signed",
+      category: "provider",
+      title: "Provider decision signed",
+      actorRole: provDecision.providerName,
+      timestamp: new Date(provDecision.signedAt).toLocaleString(),
+      handoffSummary: `Routed: ${provDecision.nextAction.replace(/_/g, " ")}`,
+      isActive: !!provDecision && status !== "disposition_finalized",
+    });
+  }
   timeline.push({
     id: "t-provider",
     category: "provider",
@@ -608,7 +728,9 @@ function buildViewFromApiCase(row: ApiCaseRow): ProviderCaseView {
     timestamp: status === "disposition_finalized" && row.updated_at
       ? new Date(row.updated_at).toLocaleString()
       : "Now",
-    isActive: status === "provider_review_pending" || status === "provider_action_issued",
+    isActive:
+      (status === "provider_review_pending" || status === "provider_action_issued") &&
+      !provDecision,
   });
 
   const handoffChecklist: HandoffItem[] = [
@@ -658,7 +780,12 @@ function buildViewFromApiCase(row: ApiCaseRow): ProviderCaseView {
     vitals: buildVitalsFromAssessment(nurse),
     assessment: {
       onset: nurse?.primary_complaint ?? row.duration_text ?? "Not recorded",
-      severity: nurse?.severity ?? row.severity_hint ?? "—",
+      severity: (() => {
+        if (nurse?.severity) return String(nurse.severity);
+        if (nurse?.pain_score != null && nurse.pain_score !== "")
+          return `Pain ${nurse.pain_score}/10`;
+        return row.severity_hint ?? "—";
+      })(),
       redFlagsLabel: redFlags.join(" · ") || "None",
       associated,
       denied,
@@ -679,6 +806,8 @@ function buildViewFromApiCase(row: ApiCaseRow): ProviderCaseView {
         ? new Date(nurse.validated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         : "—",
     },
+    serverStatus: status,
+    hydratedProviderDecision: provDecision,
   };
 }
 

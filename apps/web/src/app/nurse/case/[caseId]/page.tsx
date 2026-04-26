@@ -26,9 +26,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
-  AlertCircle, AlertTriangle, CheckCircle2, Circle, FileText, Loader2,
-  MessageSquare, Send, Sparkles, Stethoscope, Activity, ClipboardList,
-  HeartPulse, ShieldAlert,
+  AlertCircle, AlertTriangle, Brain, CheckCircle2, Circle, FileText,
+  GitBranch, ListChecks, Loader2, MessageSquare, Send, Sparkles, Stethoscope,
+  Activity, ClipboardList, HeartPulse, ShieldAlert, Zap,
 } from "lucide-react";
 import { CaseHeader, type CaseHeaderProps } from "@/components/shared/CaseHeader";
 import { CollapsibleSection } from "@/components/shared/CollapsibleSection";
@@ -36,6 +36,7 @@ import { SourceTierBadge } from "@/components/shared/ProvenanceBadges";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
 import { StatusChip } from "@/components/shared/StatusChip";
 import { useToast } from "@/components/shared/Toast";
+import { type CascadeData, normalizeCascade } from "@/lib/cascade-types";
 import type { Case } from "@/types";
 
 /* ─────────── Types ─────────── */
@@ -226,6 +227,16 @@ export default function NurseCaseWorkspace() {
 
   const [aiAssist, setAiAssist] = useState<NurseAssistResult | null>(null);
   const [isLoadingAssist, setIsLoadingAssist] = useState(false);
+
+  // AI care cascade — runs the 4-engine fan-out (intake / queue / nurse /
+  // provider) for THIS case and stores the result on the case row so the
+  // patient's live status page can surface it. Was previously triggered
+  // from /triage; now lives here because the patient page is patient-facing
+  // and the cascade is clinical decision support.
+  const [cascade, setCascade] = useState<CascadeData | null>(null);
+  const [cascadeLoading, setCascadeLoading] = useState(false);
+  const [cascadeError, setCascadeError] = useState<string | null>(null);
+  const [cascadeRanAt, setCascadeRanAt] = useState<string | null>(null);
 
   useEffect(() => {
     claimAttempted.current = false;
@@ -508,6 +519,78 @@ export default function NurseCaseWorkspace() {
       toast.error("Escalation failed", "Try again — the audit event was not recorded.");
     } finally {
       setIsEscalating(false);
+    }
+  };
+
+  /* ─── Run AI cascade for this case ─── */
+  const handleRunCascade = async () => {
+    if (!caseDetail || cascadeLoading) return;
+    setCascadeLoading(true);
+    setCascadeError(null);
+    try {
+      const severityHint =
+        Number(formData.esiLevel) <= 2
+          ? "severe"
+          : Number(formData.esiLevel) <= 3
+          ? "moderate"
+          : "mild";
+      const ageGroup = caseDetail.patient_age != null
+        ? caseDetail.patient_age < 18
+          ? "Pediatric"
+          : caseDetail.patient_age >= 65
+          ? "Geriatric"
+          : "Adult"
+        : "Adult";
+      const r = await fetch("/api/ai/triage-cascade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symptoms:
+            [caseDetail.symptom_text, caseDetail.structured_summary]
+              .filter(Boolean)
+              .join("\n\n") || "No intake narrative on file.",
+          duration: "as described",
+          severity: severityHint,
+          age_group: ageGroup,
+          patient_history: caseDetail.patient_history ?? "",
+        }),
+      });
+      if (!r.ok) throw new Error(`Cascade engine returned ${r.status}`);
+      const raw = await r.json();
+      const data = normalizeCascade(raw);
+      setCascade(data);
+      setCascadeRanAt(new Date().toISOString());
+      // Persist for the patient's live status page. Failures here are
+      // non-fatal — the nurse still sees the result inline; we just log
+      // and surface a soft warning.
+      try {
+        await fetch(
+          `/api/cases/${encodeURIComponent(caseDetail.id)}/cascade`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              cascade: raw,
+              ranBy: NURSE_ID,
+            }),
+          },
+        );
+        toast.success(
+          "Cascade saved",
+          "The patient now sees these AI insights live on their case status page.",
+        );
+      } catch {
+        toast.warn(
+          "Cascade not persisted",
+          "AI insights ran locally but couldn't be saved. Patient won't see them on their status page yet.",
+        );
+      }
+    } catch (e) {
+      setCascadeError(
+        e instanceof Error ? e.message : "Cascade request failed.",
+      );
+    } finally {
+      setCascadeLoading(false);
     }
   };
 
@@ -1015,7 +1098,136 @@ export default function NurseCaseWorkspace() {
               )}
             </CollapsibleSection>
 
-            {/* 6. Checklist + validation */}
+            {/* 6. AI care cascade — fans the case out to 4 AI subsystems */}
+            <CollapsibleSection
+              title="AI care cascade"
+              summary={
+                cascade
+                  ? `Last run ${cascadeRanAt ? formatRelativeTime(cascadeRanAt) : "just now"} · ${cascade.totalMs ?? "—"} ms`
+                  : cascadeLoading
+                  ? "Running…"
+                  : "Not run yet — click to fan out across queue, nurse, and provider AI"
+              }
+              icon={GitBranch}
+              tone="primary"
+              info="One narrative goes to four AI subsystems in parallel (intake, queue, nurse, provider). Result is saved to the case row so the patient sees the same insights live on their status page."
+              defaultOpen={false}
+              aside={cascade ? <SourceTierBadge tier={cascade.provider.source_tier} provenance={[]} /> : undefined}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <p className="text-[12.5px] text-slate-600 max-w-prose">
+                  Runs queue, nurse, and provider AI engines on this case&apos;s narrative. The
+                  patient sees the result on <code className="font-mono text-[11.5px]">/patient/status</code> as
+                  soon as you save it.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRunCascade}
+                  disabled={!caseDetail || cascadeLoading}
+                  className="fc-focus-ring inline-flex items-center gap-2 rounded-[10px] bg-[#0F4C81] px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0B3A66] disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {cascadeLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Running cascade…
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={14} />
+                      {cascade ? "Re-run cascade" : "Run AI cascade"}
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {cascadeError && (
+                <div className="rounded-[10px] border border-rose-200 bg-rose-50 p-3 text-[12.5px] text-rose-800 mb-3">
+                  <strong>Cascade error:</strong> {cascadeError}
+                </div>
+              )}
+
+              {cascadeLoading && !cascade && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="fc-skeleton h-32 w-full rounded-[10px]" />
+                  ))}
+                </div>
+              )}
+
+              {cascade && !cascadeLoading && (
+                <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-3 md:divide-x md:divide-slate-100">
+                  <NurseCascadeColumn
+                    icon={ListChecks}
+                    eyebrow="Front desk · Smart queue"
+                    tier={cascade.queue.source_tier}
+                    offline={cascade.queue.offline}
+                    className="md:pr-6"
+                  >
+                    {cascade.queue.bottleneck_alerts.length > 0 ? (
+                      <ul className="space-y-1">
+                        {cascade.queue.bottleneck_alerts.slice(0, 3).map((a, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-1.5 text-[11.5px] text-[#B45309]"
+                          >
+                            <AlertTriangle size={10} className="mt-0.5 shrink-0" />
+                            <span>{a}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11.5px] text-slate-500">No bottlenecks detected.</p>
+                    )}
+                  </NurseCascadeColumn>
+
+                  <NurseCascadeColumn
+                    icon={Stethoscope}
+                    eyebrow="Nurse · Pre-brief"
+                    tier={cascade.nurse.source_tier}
+                    offline={cascade.nurse.offline}
+                    className="md:px-6"
+                  >
+                    {cascade.nurse.suggested_questions.length > 0 ? (
+                      <ul className="space-y-1 text-[11.5px] text-slate-700">
+                        {cascade.nurse.suggested_questions.slice(0, 3).map((q, i) => (
+                          <li key={i} className="flex items-start gap-1.5">
+                            <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[#0F4C81]" />
+                            <span>{q}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11.5px] text-slate-500">No suggested questions.</p>
+                    )}
+                  </NurseCascadeColumn>
+
+                  <NurseCascadeColumn
+                    icon={Brain}
+                    eyebrow="Provider · Co-pilot"
+                    tier={cascade.provider.source_tier}
+                    offline={cascade.provider.offline}
+                    className="md:pl-6"
+                  >
+                    {cascade.provider.differential_dx.length > 0 ? (
+                      <ul className="space-y-1.5 text-[11.5px]">
+                        {cascade.provider.differential_dx.slice(0, 3).map((d, i) => (
+                          <li key={i} className="flex items-baseline gap-1.5">
+                            <span className="font-semibold text-slate-900">{d.diagnosis}</span>
+                            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9.5px] uppercase tracking-wider text-slate-600">
+                              {d.probability}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11.5px] text-slate-500">No differential generated.</p>
+                    )}
+                  </NurseCascadeColumn>
+                </div>
+              )}
+            </CollapsibleSection>
+
+            {/* 7. Checklist + validation */}
             <CollapsibleSection
               title="Handoff readiness"
               summary={`${checklist.filter(c => c.done).length} of ${checklist.length} items satisfied`}
@@ -1227,6 +1439,45 @@ function Field({
       {children}
       {hint && <span className="text-[11.5px] text-slate-500">{hint}</span>}
     </label>
+  );
+}
+
+function NurseCascadeColumn({
+  icon: Icon,
+  eyebrow,
+  tier,
+  offline,
+  className,
+  children,
+}: {
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  eyebrow: string;
+  tier: number;
+  offline?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={["min-w-0", className ?? ""].join(" ").trim()}>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex items-start gap-1.5 min-w-0">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--radius-chip)] bg-[#0F4C81]/10 text-[#0F4C81]">
+            <Icon size={11} />
+          </span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500 leading-snug pt-0.5">
+            {eyebrow}
+          </span>
+        </div>
+        <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-slate-600">
+          T{tier}
+        </span>
+      </div>
+      {offline ? (
+        <p className="text-[11px] text-slate-500">AI engine offline.</p>
+      ) : (
+        children
+      )}
+    </div>
   );
 }
 

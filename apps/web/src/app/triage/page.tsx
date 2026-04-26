@@ -46,6 +46,7 @@ import {
   Zap,
 } from "lucide-react";
 import { RoleChip } from "@/components/common/RoleChip";
+import { Disclosure } from "@/components/shared/Disclosure";
 import { SyntheaPicker, type SyntheaSelection } from "./SyntheaPicker";
 import { CommunityPanel } from "./CommunityPanel";
 import { PharmacyFinder } from "./PharmacyFinder";
@@ -106,15 +107,35 @@ type AgeGroup = "Pediatric" | "Adult" | "Geriatric";
 
 type Urgency = "CRITICAL" | "URGENT" | "SEMI-URGENT" | "NON-URGENT";
 
+// Urgency channels are pinned to the design system tokens defined in
+// globals.css (`--urgency-high: #C62828`, `--urgency-medium: #E65100`,
+// `--urgency-low: #2E7D32`). CRITICAL is a darker shade of urgency-high
+// so the four-step ESI-flavoured scale still has visible hierarchy.
 const URG_STYLE: Record<
   Urgency,
   { bg: string; text: string; border: string; dot: string; label: string }
 > = {
-  CRITICAL: { bg: "#DC2626", text: "#FFFFFF", border: "#7F1D1D", dot: "#FEE2E2", label: "CRITICAL" },
-  URGENT: { bg: "#EA580C", text: "#FFFFFF", border: "#9A3412", dot: "#FFEDD5", label: "URGENT" },
-  "SEMI-URGENT": { bg: "#FACC15", text: "#1F2937", border: "#A16207", dot: "#FEF3C7", label: "SEMI-URGENT" },
-  "NON-URGENT": { bg: "#16A34A", text: "#FFFFFF", border: "#14532D", dot: "#DCFCE7", label: "NON-URGENT" },
+  CRITICAL:      { bg: "#991B1B", text: "#FFFFFF", border: "#7F1D1D", dot: "#FECACA", label: "CRITICAL" },
+  URGENT:        { bg: "#C62828", text: "#FFFFFF", border: "#7F1D1D", dot: "#FEE2E2", label: "URGENT" },
+  "SEMI-URGENT": { bg: "#E65100", text: "#FFFFFF", border: "#9F3009", dot: "#FFE7BA", label: "SEMI-URGENT" },
+  "NON-URGENT":  { bg: "#2E7D32", text: "#FFFFFF", border: "#14532D", dot: "#DCFCE7", label: "NON-URGENT" },
 };
+
+// Plain-English narration of each urgency tier. Surfaced at the top of
+// Step 2 so the patient sees a sentence ("we think this needs urgent
+// care within an hour") before any numeric/clinical detail.
+function urgencyHeadline(u: Urgency): string {
+  switch (u) {
+    case "CRITICAL":
+      return "These symptoms can be life-threatening — please go to the Emergency Department now or call 911.";
+    case "URGENT":
+      return "We think this needs urgent care within the next hour. Please head to the ED triage or an urgent-care clinic right away.";
+    case "SEMI-URGENT":
+      return "We recommend you see a clinician today. A same-day urgent-care or primary-care visit will keep you on the safe path.";
+    case "NON-URGENT":
+      return "This looks routine. A primary-care follow-up in the next few days should be enough — but if anything changes, come back here.";
+  }
+}
 
 function normalizeUrgency(v: unknown): Urgency {
   const s = String(v ?? "").trim().toUpperCase();
@@ -443,9 +464,13 @@ export default function TriagePage() {
   const [showFhir, setShowFhir] = useState(false);
   const [showThinks, setShowThinks] = useState(false);
 
-  const [cascade, setCascade] = useState<CascadeData | null>(null);
-  const [cascadeLoading, setCascadeLoading] = useState(false);
-  const [cascadeError, setCascadeError] = useState<string | null>(null);
+  // Cascade is no longer triggered from /triage. The patient page is
+  // patient-facing, so the "fan out across queue / nurse / provider AI"
+  // step now belongs to the nurse workspace once the case is in the
+  // care team's queue. The patient sees those AI insights live on
+  // /patient/status/[caseId] after handoff. See
+  // apps/web/src/app/nurse/case/[caseId]/page.tsx and
+  // apps/web/src/lib/cascade-store.ts for the new home.
 
   // Captured at submit time so the community panel can fetch against the
   // exact narrative the user analysed, not what they're currently typing.
@@ -475,8 +500,6 @@ export default function TriagePage() {
     setActiveScenarioId(s.id);
     setSymptomText(s.text);
     setAgeGroup(s.age);
-    setCascade(null);
-    setCascadeError(null);
     setSubmittedNarrative("");
     setPickedSynthea(null);
     setHandoffState("idle");
@@ -492,8 +515,6 @@ export default function TriagePage() {
     setAgeGroup(selection.ageGroup);
     setResult(null);
     setError(null);
-    setCascade(null);
-    setCascadeError(null);
     setSubmittedNarrative("");
     setPickedSynthea(selection);
     setHandoffState("idle");
@@ -507,8 +528,6 @@ export default function TriagePage() {
     setResult(null);
     setError(null);
     setShowFhir(false);
-    setCascade(null);
-    setCascadeError(null);
     setSubmittedNarrative(narrativeAtSubmit);
     setHandoffState("idle");
     setHandoffCaseId(null);
@@ -541,54 +560,55 @@ export default function TriagePage() {
     }
   };
 
-  const handleRunCascade = async () => {
-    setCascadeLoading(true);
-    setCascadeError(null);
-    setCascade(null);
-    try {
-      const response = await fetch("/api/ai/triage-cascade", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          symptoms: symptomText,
-          duration: "as described",
-          severity: 7,
-          age_group: ageGroup,
-          patient_history: "",
-        }),
-      });
-      if (!response.ok) throw new Error(`Cascade returned ${response.status}`);
-      const data = await response.json();
-      setCascade(normalizeCascade(data));
-    } catch (e) {
-      setCascadeError(
-        e instanceof Error ? e.message : "Cascade request failed.",
-      );
-    } finally {
-      setCascadeLoading(false);
-    }
+  // Modal-driven handoff. Clicking "Send to front desk" no longer fires
+  // the case create directly — it opens a confirmation dialog that lets
+  // the patient (or kiosk attendant) confirm or correct their basic
+  // identity + contact details first. The same payload then carries
+  // through to the front-desk queue, so the front-desk staff already
+  // knows who they're greeting when the case lights up.
+  const [showHandoffModal, setShowHandoffModal] = useState(false);
+
+  const openHandoffModal = () => {
+    if (!result) return;
+    setHandoffError(null);
+    setShowHandoffModal(true);
   };
 
   // Lift the current AI verdict into a real case row in the front-desk
   // queue. Mirrors the payload shape that /patient/intake POSTs to
   // /api/cases/create so the queue and downstream pages render this
   // case identically to one that came from the production intake form.
-  // If the user picked a Synthea patient we attach that synthetic
-  // identity; otherwise we tag the case as an anonymous walk-in.
-  const handleSendToFrontDesk = async () => {
+  const submitHandoff = async (form: HandoffPatientForm) => {
     if (!result || handoffState === "sending") return;
     setHandoffState("sending");
     setHandoffError(null);
     setHandoffCaseId(null);
 
     const synthea = pickedSynthea?.patient;
-    const anonSuffix = Math.floor(Math.random() * 9000 + 1000);
-    const patientName = synthea
-      ? formatSyntheaName(synthea.label)
-      : `Walk-in ${anonSuffix}`;
-
     const urgencyForCase = mapUrgencyToCaseLevel(result.urgency);
     const nowIso = new Date().toISOString();
+
+    const trimmedName = form.fullName.trim();
+    const anonSuffix = Math.floor(Math.random() * 9000 + 1000);
+    const finalName =
+      trimmedName.length > 0
+        ? trimmedName
+        : synthea
+        ? formatSyntheaName(synthea.label)
+        : `Walk-in ${anonSuffix}`;
+
+    const ageNumber = (() => {
+      if (form.age.trim()) {
+        const parsed = Number(form.age);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return synthea?.age ?? null;
+    })();
+
+    const additional = form.additionalDetails.trim();
+    const additionalSuffix = synthea
+      ? `Synthetic patient (Synthea ${pickedSynthea?.patient.bucket}). Active meds: ${(synthea.active_medications ?? []).join(", ") || "none"}.`
+      : "Created from /triage demo (kiosk handoff).";
 
     const payload: Record<string, unknown> = {
       urgency: urgencyForCase,
@@ -601,15 +621,17 @@ export default function TriagePage() {
       severity_hint: "high",
       source_channel: synthea ? "ai_triage_demo_synthea" : "ai_triage_demo",
       ai_clinician_brief: result.clinicianBrief,
-      patient_full_name: patientName,
-      patient_age: synthea?.age ?? null,
-      patient_gender: synthea?.sex ?? null,
-      patient_history: synthea
-        ? (synthea.active_conditions ?? []).join("; ")
-        : "",
-      additional_details: synthea
-        ? `Synthetic patient (Synthea ${pickedSynthea?.patient.bucket}). Active meds: ${(synthea.active_medications ?? []).join(", ") || "none"}.`
-        : "Created from /triage demo (no patient identity captured).",
+      patient_full_name: finalName,
+      patient_age: ageNumber,
+      patient_gender: form.sex || synthea?.sex || null,
+      patient_phone: form.phone.trim() || null,
+      patient_email: form.email.trim() || null,
+      patient_history:
+        form.history.trim() ||
+        (synthea ? (synthea.active_conditions ?? []).join("; ") : ""),
+      additional_details: additional
+        ? `${additional}\n\n${additionalSuffix}`
+        : additionalSuffix,
       created_at: nowIso,
       updated_at: nowIso,
     };
@@ -628,6 +650,7 @@ export default function TriagePage() {
       if (!body.caseId) throw new Error("Case created but no id returned");
       setHandoffCaseId(body.caseId);
       setHandoffState("sent");
+      setShowHandoffModal(false);
     } catch (e) {
       setHandoffError(
         e instanceof Error ? e.message : "Case handoff failed.",
@@ -643,9 +666,9 @@ export default function TriagePage() {
         onOpenThinks={() => setShowThinks(true)}
       />
 
-      <main className="mx-auto w-full max-w-[1280px] px-4 py-5 lg:px-8 lg:py-7">
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
-          <section className="lg:col-span-5 xl:col-span-5">
+      <main className="mx-auto w-full max-w-[1280px] px-4 py-6 lg:px-8 lg:py-8">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <section className="lg:col-span-5 xl:col-span-4">
             <InputPanel
               symptomText={symptomText}
               setSymptomText={setSymptomText}
@@ -660,53 +683,48 @@ export default function TriagePage() {
             />
           </section>
 
-          <section className="lg:col-span-7 xl:col-span-7">
+          <section className="lg:col-span-7 xl:col-span-8">
             <OutputPanel
               loading={loading}
               error={error}
               result={result}
               showFhir={showFhir}
               setShowFhir={setShowFhir}
+              symptomNarrative={submittedNarrative || symptomText}
+              ageGroup={ageGroup}
+              pickedSynthea={pickedSynthea}
             />
           </section>
         </div>
 
         {result && !error && (
-          <div className="mt-5">
-            <FrontDeskHandoffBanner
-              urgency={result.urgency}
-              state={handoffState}
-              caseId={handoffCaseId}
-              error={handoffError}
-              syntheaName={
-                pickedSynthea
-                  ? formatSyntheaName(pickedSynthea.patient.label)
-                  : null
-              }
-              onSend={handleSendToFrontDesk}
-            />
-          </div>
-        )}
-
-        {result && !error && (
-          <CascadeSection
-            cascade={cascade}
-            loading={cascadeLoading}
-            error={cascadeError}
-            onRun={handleRunCascade}
+          <CarePlanCard
+            urgency={result.urgency}
+            handoffState={handoffState}
+            handoffCaseId={handoffCaseId}
+            handoffError={handoffError}
+            syntheaName={
+              pickedSynthea
+                ? formatSyntheaName(pickedSynthea.patient.label)
+                : null
+            }
+            onSend={openHandoffModal}
+            suggestedDrug={result.medications[0]?.name ?? ""}
+            communityNarrative={submittedNarrative.length >= 12 ? submittedNarrative : ""}
           />
         )}
 
-        {result && !error && submittedNarrative.length >= 12 && (
-          <div className="mt-5">
-            <CommunityPanel narrative={submittedNarrative} />
-          </div>
-        )}
-
-        {result && !error && (
-          <div className="mt-5">
-            <PharmacyFinder suggestedDrug={result.medications[0]?.name ?? ""} />
-          </div>
+        {showHandoffModal && result && (
+          <SendToFrontDeskModal
+            urgency={result.urgency}
+            summary={result.summary}
+            recommendedRoute={result.recommendedRoute}
+            sending={handoffState === "sending"}
+            error={handoffError}
+            initial={makeInitialHandoffForm(pickedSynthea)}
+            onCancel={() => setShowHandoffModal(false)}
+            onSubmit={submitHandoff}
+          />
         )}
 
         <DisclaimerFooter />
@@ -715,7 +733,6 @@ export default function TriagePage() {
       {showThinks && (
         <ThinksDrawer
           result={result}
-          cascade={cascade}
           onClose={() => setShowThinks(false)}
         />
       )}
@@ -771,7 +788,7 @@ function TopBar({
           </button>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-800 sm:hidden">
+        <div className="inline-flex items-center gap-2 rounded-full border border-[#FFE7BA] bg-[#FFF7ED] px-3 py-1.5 text-[11px] font-semibold text-[#B45309] sm:hidden">
           <AlertTriangle size={13} />
           Decision support only
         </div>
@@ -826,70 +843,83 @@ function InputPanel({
   onAnalyze: () => void;
 }) {
   return (
-    <div className="fc-card p-5 lg:p-6">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <div className="fc-eyebrow">Step 1</div>
-          <h1 className="fc-page-title">Describe the patient</h1>
-          <p className="fc-page-subtitle">Pick a scenario, load a real Synthea patient, or write your own.</p>
-        </div>
-      </div>
+    <article className="fc-card p-5 lg:p-6 min-w-0">
+      <header className="mb-4">
+        <div className="fc-eyebrow">Step 1 · Describe the patient</div>
+        <h1 className="fc-section-title mt-1">What&apos;s going on today?</h1>
+        <p className="mt-1 text-[12.5px] leading-snug text-slate-500">
+          Pick a scenario, load a Synthea patient, or write your own.
+        </p>
+      </header>
 
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
-        Demo scenarios
-      </div>
-      <div className="mb-4 grid grid-cols-2 gap-2.5">
-        {SCENARIOS.map((s) => {
-          const active = activeScenarioId === s.id;
-          const Icon = s.icon;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => onPickScenario(s)}
-              className={[
-                "fc-card-interactive fc-focus-ring group flex items-start gap-2.5 rounded-[12px] border p-3 text-left transition",
-                active
-                  ? "border-[#0F4C81] bg-[#EEF4FB] shadow-[0_0_0_3px_rgba(15,76,129,0.12)]"
-                  : "border-slate-200 bg-white hover:border-[#0F4C81]/50",
-              ].join(" ")}
-            >
-              <span
+      <section>
+        <div className="fc-eyebrow mb-2">Demo scenarios</div>
+        <div className="grid grid-cols-2 gap-2">
+          {SCENARIOS.map((s) => {
+            const active = activeScenarioId === s.id;
+            const Icon = s.icon;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onPickScenario(s)}
                 className={[
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]",
-                  active ? "bg-[#0F4C81] text-white" : "bg-[#0F4C81]/10 text-[#0F4C81]",
+                  "fc-focus-ring group flex items-center gap-2 rounded-[var(--radius-control)] border px-3 h-12 text-left transition",
+                  active
+                    ? "border-[var(--primary)] bg-[#EEF4FB] shadow-[inset_0_0_0_1px_rgba(15,76,129,0.4)]"
+                    : "border-slate-200 bg-white hover:border-[var(--primary)]/50",
                 ].join(" ")}
               >
-                <Icon size={16} strokeWidth={2} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[13px] font-semibold leading-tight text-slate-900">
-                  {s.label}
+                <span
+                  className={[
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-chip)]",
+                    active ? "bg-[var(--primary)] text-white" : "bg-[var(--primary)]/10 text-[var(--primary)]",
+                  ].join(" ")}
+                >
+                  <Icon size={14} strokeWidth={2} />
                 </span>
-                <span className="block text-[11px] leading-tight text-slate-500">{s.hint}</span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+                <span className="min-w-0">
+                  <span className="block text-[12.5px] font-semibold leading-tight text-slate-900 truncate">
+                    {s.label}
+                  </span>
+                  <span className="block text-[10.5px] leading-tight text-slate-500 truncate">
+                    {s.hint}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <hr className="my-4 border-t border-slate-100" />
 
       <SyntheaPicker onSelect={onPickSynthea} />
 
-      <label htmlFor="symptoms" className="mb-1.5 block text-[12px] font-semibold text-slate-700">
-        Patient symptom description
-      </label>
-      <textarea
-        id="symptoms"
-        rows={6}
-        className="fc-text-input fc-focus-ring resize-y"
-        placeholder="Or describe the patient's symptoms in your own words…"
-        value={symptomText}
-        onChange={(e) => setSymptomText(e.target.value)}
-      />
+      <hr className="my-4 border-t border-slate-100" />
 
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor="age" className="mb-1.5 block text-[12px] font-semibold text-slate-700">
+      <section>
+        <div className="flex items-baseline justify-between gap-3 mb-2">
+          <label htmlFor="symptoms" className="fc-eyebrow">
+            Symptom description
+          </label>
+          <span className="text-[10.5px] text-slate-500">
+            {symptomText.length > 0
+              ? `${symptomText.trim().split(/\s+/).filter(Boolean).length} words`
+              : "Awaiting input"}
+          </span>
+        </div>
+        <textarea
+          id="symptoms"
+          rows={5}
+          className="fc-text-input fc-focus-ring resize-y"
+          placeholder="Describe the patient&apos;s symptoms in plain language…"
+          value={symptomText}
+          onChange={(e) => setSymptomText(e.target.value)}
+        />
+
+        <div className="mt-3">
+          <label htmlFor="age" className="fc-eyebrow mb-1.5 block">
             Age group
           </label>
           <select
@@ -898,41 +928,36 @@ function InputPanel({
             value={ageGroup}
             onChange={(e) => setAgeGroup(e.target.value as AgeGroup)}
           >
-            <option value="Pediatric">Pediatric</option>
-            <option value="Adult">Adult</option>
-            <option value="Geriatric">Geriatric</option>
+            <option value="Pediatric">Pediatric · 0 – 17 years</option>
+            <option value="Adult">Adult · 18 – 64 years</option>
+            <option value="Geriatric">Geriatric · 65 years and over</option>
           </select>
+          <p className="mt-1 text-[11px] leading-snug text-slate-500">
+            Drives age-aware vitals ranges and red-flag rules.
+          </p>
         </div>
-        <div className="flex items-end justify-end text-right text-[11px] text-slate-500">
-          <span>
-            {symptomText.length > 0
-              ? `${symptomText.trim().split(/\s+/).filter(Boolean).length} words`
-              : "Awaiting input"}
-          </span>
-        </div>
-      </div>
+      </section>
 
       <button
         type="button"
         onClick={onAnalyze}
         disabled={!canSubmit}
         className={[
-          "fc-focus-ring mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-3 text-[14px] font-bold transition",
+          "fc-focus-ring mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] px-4 h-11 text-[14px] font-semibold transition",
           canSubmit
-            ? "bg-[#E85D04] text-white shadow-[0_4px_14px_rgba(232,93,4,0.25)] hover:bg-[#C2410C]"
-            : "cursor-not-allowed bg-slate-200 text-slate-500",
+            ? "bg-[var(--primary)] text-white shadow-[0_2px_8px_rgba(15,76,129,0.25)] hover:bg-[#0B3A66]"
+            : "cursor-not-allowed bg-slate-100 text-slate-400",
         ].join(" ")}
       >
-        <Sparkles size={16} />
-        {loading ? "Analyzing…" : "Analyze & Triage"}
-        {!loading && <ArrowRight size={16} />}
+        <Sparkles size={15} />
+        {loading ? "Analyzing…" : "Analyze & triage"}
+        {!loading && <ArrowRight size={15} />}
       </button>
 
-      <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-        Your words are checked against a clinical reference library, then organized into urgency and
-        next-step suggestions for the care team to review. Nothing here replaces a clinician.
+      <p className="mt-2 text-[11px] leading-snug text-slate-500">
+        Cross-checked against a clinical reference library. Nothing here replaces a clinician.
       </p>
-    </div>
+    </article>
   );
 }
 
@@ -946,42 +971,67 @@ function OutputPanel({
   result,
   showFhir,
   setShowFhir,
+  symptomNarrative,
+  ageGroup,
+  pickedSynthea,
 }: {
   loading: boolean;
   error: string | null;
   result: TriageResult | null;
   showFhir: boolean;
   setShowFhir: (b: boolean) => void;
+  symptomNarrative: string;
+  ageGroup: AgeGroup;
+  pickedSynthea: SyntheaSelection | null;
 }) {
   const toast = useToast();
   const [pdfBusy, setPdfBusy] = useState(false);
 
+  // Triage PDF export — uses the same A4 brand-stripe pattern as the
+  // patient intake receipt (lib/intake-receipt.ts) so every PDF coming
+  // out of FrudgeCare looks consistent. Pre-handoff so we don't have a
+  // case_code yet — we synthesize a "triage assessment" preview instead.
   const exportTriagePdf = async () => {
     if (!result || pdfBusy) return;
     setPdfBusy(true);
     try {
-      const { downloadTextPdf } = await import("@/lib/clientPdf");
-      const lines = [
-        "FrudgeCare — triage screen summary (demo)",
-        `Urgency: ${result.urgency}`,
-        result.urgencyReason,
-        "",
-        "Suggested next step for the care team",
-        result.recommendedRoute,
-        "",
-        "Clinical note (if provided)",
-        result.clinicianBrief || "—",
-        "",
-        result.llmProvider
-          ? `Assist source: ${result.llmProvider} ${result.llmModel ?? ""}`.trim()
-          : "Assist source: rules / knowledge base (no API response)",
-      ];
-      await downloadTextPdf(
-        `frudgecare-triage-${Date.now()}.pdf`,
-        "Triage summary (demo)",
-        lines,
-      );
-      toast.success("PDF saved", "Check your downloads folder.");
+      const { downloadTriageReceipt } = await import("@/lib/triage-receipt");
+      const synthea = pickedSynthea?.patient;
+      const patientName = synthea
+        ? formatSyntheaName(synthea.label)
+        : "Anonymous walk-in";
+      await downloadTriageReceipt({
+        patientName,
+        patientAge: synthea?.age ?? result.demographics.age ?? null,
+        patientSex: synthea?.sex ?? result.demographics.sex ?? null,
+        patientHistory: synthea
+          ? (synthea.active_conditions ?? []).join("; ")
+          : "",
+        ageGroup,
+        symptomNarrative: symptomNarrative.trim() || "No narrative captured.",
+        urgency: result.urgency,
+        urgencyReason: result.urgencyReason,
+        recommendedRoute: result.recommendedRoute,
+        clinicianBrief: result.clinicianBrief,
+        summary: result.summary,
+        symptoms: result.symptoms,
+        risks: result.risks,
+        vitals: result.vitals.map((v) => ({
+          field: v.field,
+          value: v.value,
+          unit: v.unit,
+          status: v.status,
+        })),
+        icd10: result.icd10,
+        ragSource: result.ragSource,
+        ragEvidence: result.ragEvidence,
+        confidencePct: Math.round((result.confidence.score || 0) * 100),
+        sourceTier: result.sourceTier,
+        llmProvider: result.llmProvider,
+        llmModel: result.llmModel,
+        generatedAt: new Date(),
+      });
+      toast.success("Triage receipt saved", "Check your downloads folder.");
     } catch (e) {
       console.error(e);
       toast.error("Export failed", "Try again in a moment.");
@@ -991,18 +1041,20 @@ function OutputPanel({
   };
 
   return (
-    <div className="fc-card overflow-hidden">
-      <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50/60 px-5 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
-        <div>
-          <div className="fc-eyebrow">Step 2</div>
-          <div className="text-[14px] font-semibold text-slate-900">Triage output</div>
+    <article className="fc-card p-5 lg:p-6 min-w-0">
+      <header className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <div className="fc-eyebrow">Step 2 · Your triage result</div>
+          <h2 className="fc-section-title mt-1">
+            Here&apos;s what we found in your description
+          </h2>
         </div>
         {result && !loading && !error && (
           <button
             type="button"
             onClick={exportTriagePdf}
             disabled={pdfBusy}
-            className="fc-focus-ring inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+            className="fc-focus-ring shrink-0 inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-slate-200 bg-white px-3 h-8 text-[12px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
           >
             {pdfBusy ? "Preparing…" : (
               <>
@@ -1012,27 +1064,25 @@ function OutputPanel({
             )}
           </button>
         )}
-      </div>
+      </header>
 
-      <div className="p-5 lg:p-6">
-        {loading && <SkeletonOutput />}
+      {loading && <SkeletonOutput />}
 
-        {!loading && error && (
-          <div className="rounded-[12px] border border-rose-200 bg-rose-50 p-4 text-[13px] text-rose-800">
-            <div className="mb-1 flex items-center gap-2 font-semibold">
-              <AlertTriangle size={14} /> Triage engine error
-            </div>
-            <div>{error}</div>
+      {!loading && error && (
+        <div className="rounded-[var(--radius-control)] border border-rose-200 bg-rose-50 p-4 text-[13px] text-rose-800">
+          <div className="mb-1 flex items-center gap-2 font-semibold">
+            <AlertTriangle size={14} /> Triage engine error
           </div>
-        )}
+          <div>{error}</div>
+        </div>
+      )}
 
-        {!loading && !error && !result && <EmptyOutput />}
+      {!loading && !error && !result && <EmptyOutput />}
 
-        {!loading && !error && result && (
-          <ResultBlocks result={result} showFhir={showFhir} setShowFhir={setShowFhir} />
-        )}
-      </div>
-    </div>
+      {!loading && !error && result && (
+        <ResultBlocks result={result} showFhir={showFhir} setShowFhir={setShowFhir} />
+      )}
+    </article>
   );
 }
 
@@ -1082,37 +1132,50 @@ function ResultBlocks({
   setShowFhir: (b: boolean) => void;
 }) {
   const u = URG_STYLE[result.urgency];
+  const hasContext =
+    result.demographics.age !== null ||
+    !!result.demographics.sex ||
+    result.temporal.phrases.length > 0 ||
+    result.medications.length > 0;
+  const noEntities =
+    result.symptoms.length === 0 &&
+    result.risks.length === 0 &&
+    result.negations.length === 0;
+
   return (
-    <div className="space-y-5">
-      {/* Urgency block + confidence + tier badges */}
-      <div
-        className="rounded-[14px] border-2 px-5 py-4"
-        style={{ backgroundColor: u.bg, color: u.text, borderColor: u.border }}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div
-              className="text-[10px] font-bold uppercase tracking-[0.16em] opacity-90"
-              style={{ color: u.text }}
-            >
-              Triage urgency
-            </div>
-            <div
-              className="text-[26px] font-extrabold leading-tight tracking-tight"
-              style={{ color: u.text }}
-            >
-              {u.label}
-            </div>
+    <div>
+      {/* SECTION 1: Urgency — full-bleed colored band breaking out of the
+          card's horizontal padding only, so it sits cleanly under the
+          OutputPanel header instead of overlapping it. No nested card. */}
+      <section id="urgency" className="scroll-mt-24">
+        <div
+          className="-mx-5 px-5 py-4 lg:-mx-6 lg:px-6 lg:py-5 rounded-[var(--radius-card)]"
+          style={{ backgroundColor: u.bg, color: u.text }}
+        >
+          <div className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-90">
+            Triage urgency
           </div>
-          <div className="flex flex-col items-end gap-1.5">
-            <ConfidencePill confidence={result.confidence} bg={u.dot} fg={u.bg} />
+          <div className="mt-1 text-[26px] font-extrabold leading-tight tracking-tight">
+            {u.label}
+          </div>
+          <p className="mt-2 max-w-[640px] text-[13.5px] leading-relaxed opacity-95">
+            {urgencyHeadline(result.urgency)}
+          </p>
+        </div>
+
+        <div className="mt-5">
+          <p className="text-[13.5px] leading-[20px] text-slate-700">
+            {result.urgencyReason}
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <ConfidencePill confidence={result.confidence} bg="#EEF4FB" fg="#0F4C81" />
             {result.sourceTier !== undefined && (
-              <TierBadge tier={result.sourceTier} bg={u.dot} fg={u.bg} />
+              <TierBadge tier={result.sourceTier} bg="#F1F5F9" fg="#334155" />
             )}
             {result.llmProvider && (
               <span
-                className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                style={{ borderColor: u.dot, color: u.text, background: u.bg }}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-slate-700"
                 title={
                   result.llmProvider === "deterministic"
                     ? "No live LLM was used; this response came from the local clinical knowledge base or a safe default."
@@ -1125,162 +1188,192 @@ function ResultBlocks({
               </span>
             )}
           </div>
-        </div>
-        <p className="mt-2 text-[13px] leading-relaxed" style={{ color: u.text, opacity: 0.95 }}>
-          {result.urgencyReason}
-        </p>
-      </div>
 
-      {/* Vitals strip — extracted by NLP regex from the narrative */}
-      {result.vitals.length > 0 && <VitalsStrip vitals={result.vitals} />}
-
-      {/* NLP entities + ICD-10 codes inline */}
-      <Block
-        eyebrow="NLP"
-        title="Extracted clinical entities"
-        helper="Symptoms, negations, and risk flags parsed from the narrative. Hover a chip for ICD-10."
-      >
-        {result.symptoms.length === 0 && result.risks.length === 0 && result.negations.length === 0 && (
-          <p className="text-[12.5px] text-slate-500">
-            No structured entities surfaced. The full reasoning is shown in the evidence block below.
-          </p>
-        )}
-        <div className="flex flex-wrap gap-1.5">
-          {result.symptoms.map((s) => {
-            const icd = result.icd10.find(
-              (t) => t.term.toLowerCase() === s.toLowerCase(),
-            );
-            return (
-              <Chip
-                key={`sym-${s}`}
-                variant="primary"
-                title={icd ? `ICD-10 ${icd.code} — ${icd.display}` : undefined}
-                badge={icd?.code}
-              >
-                {s}
-              </Chip>
-            );
-          })}
-          {result.risks.map((r) => (
-            <Chip key={`risk-${r}`} variant="danger">
-              {r}
-            </Chip>
-          ))}
-          {result.negations.map((n) => (
-            <Chip key={`neg-${n}`} variant="negation">
-              {n}
-            </Chip>
-          ))}
-        </div>
-      </Block>
-
-      {/* Demographics + temporal — small inline strip */}
-      {(result.demographics.age !== null ||
-        result.demographics.sex ||
-        result.temporal.phrases.length > 0) && (
-        <div className="flex flex-wrap gap-2 rounded-[10px] border border-slate-200 bg-slate-50/60 px-3 py-2 text-[11.5px]">
-          {result.demographics.age !== null && (
-            <span className="inline-flex items-center gap-1 text-slate-700">
-              <Users size={11} /> Age {result.demographics.age}
-              {result.demographics.sex ? ` · ${result.demographics.sex}` : ""}
-              {result.demographics.age_group ? ` · ${result.demographics.age_group}` : ""}
+          <div className="mt-4 grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1 border-l-2 border-l-[var(--primary)] pl-4">
+            <span className="fc-eyebrow whitespace-nowrap">Next step</span>
+            <span className="text-[14px] font-semibold leading-snug text-slate-900">
+              {result.recommendedRoute}
             </span>
-          )}
-          {result.temporal.phrases.length > 0 && (
-            <span className="inline-flex items-center gap-1 text-slate-700">
-              <Clock size={11} /> {result.temporal.phrases.join(" · ")}
-              {result.temporal.minutes_since_onset !== null && (
-                <span className="text-slate-500"> ({result.temporal.minutes_since_onset} min)</span>
-              )}
-            </span>
-          )}
-          {result.medications.length > 0 && (
-            <span className="inline-flex items-center gap-1 text-slate-700">
-              <Pill size={11} /> Meds detected: {result.medications.map((m) => m.name).join(", ")}
-            </span>
-          )}
+          </div>
         </div>
-      )}
+      </section>
 
-      {/* Recommended care route */}
-      <Block eyebrow="Routing" title="Recommended care route" helper="Care coordinator action item.">
-        <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] font-semibold text-slate-900">
-          {result.recommendedRoute}
-        </div>
-      </Block>
+      <hr className="my-6 border-t border-slate-100" />
 
-      {/* RAG evidence — show top match prominently + top-3 list */}
-      <Block
-        eyebrow="RAG"
-        title="Clinical guideline evidence"
-        helper="Retrieved deterministically before the LLM ran — grounded, not hallucinated."
-      >
-        <blockquote className="rounded-[10px] border-l-4 border-l-[#0F4C81] bg-[#EEF4FB] px-4 py-3 text-[13.5px] leading-relaxed text-slate-800">
-          {result.ragEvidence}
-        </blockquote>
-        <div className="mt-2 text-[11.5px] font-semibold text-[#0F4C81]">
-          Source: {result.ragSource}
+      {/* SECTION 2: What we noticed — flat, no internal cards. */}
+      <section id="findings" className="scroll-mt-24">
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <h3 className="fc-section-title">What we noticed in your symptoms</h3>
+          <span className="text-[11px] text-slate-500">
+            From your description
+          </span>
         </div>
 
-        {result.ragMatches.length > 1 && (
-          <div className="mt-3 space-y-1.5">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
-              Top {result.ragMatches.length} retrieved guidelines
-            </div>
-            {result.ragMatches.map((m, i) => (
-              <div
-                key={m.id}
-                className="rounded-[8px] border border-slate-200 bg-white px-3 py-2 text-[11.5px]"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-semibold text-slate-800">
-                    #{i + 1} · {m.source}
-                  </div>
-                  <ScoreBar score={m.score} />
-                </div>
-                {m.matched_keywords.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {m.matched_keywords.slice(0, 6).map((kw) => (
-                      <span
-                        key={`${m.id}-${kw}`}
-                        className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] text-slate-600"
-                      >
-                        {kw}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+        {result.vitals.length > 0 && (
+          <div className="mb-4">
+            <div className="fc-eyebrow mb-2">Vitals</div>
+            <VitalsStrip vitals={result.vitals} />
           </div>
         )}
-      </Block>
 
-      {/* FHIR */}
-      <Block
-        eyebrow="FHIR R4"
-        title="FHIR-compatible output"
-        helper="CarePlan + Observation entries shaped for EHR / Gazuntite ingestion."
-      >
-        <button
-          type="button"
-          onClick={() => setShowFhir(!showFhir)}
-          className="fc-focus-ring inline-flex items-center gap-2 rounded-[8px] border border-slate-200 bg-white px-3 py-2 text-[12.5px] font-semibold text-slate-700 transition hover:border-[#0F4C81]/50 hover:text-[#0F4C81]"
-        >
-          <FileJson size={14} />
-          {showFhir ? "Hide JSON" : "Show JSON"}
-          {showFhir ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
+        <div>
+          <div className="fc-eyebrow mb-2">Symptoms, risks &amp; negations</div>
+          {noEntities ? (
+            <p className="text-[12.5px] text-slate-500">
+              No structured entities surfaced. The full reasoning is shown in the evidence section below.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {result.symptoms.map((s) => {
+                const icd = result.icd10.find(
+                  (t) => t.term.toLowerCase() === s.toLowerCase(),
+                );
+                return (
+                  <Chip
+                    key={`sym-${s}`}
+                    variant="primary"
+                    title={icd ? `ICD-10 ${icd.code} — ${icd.display}` : undefined}
+                    badge={icd?.code}
+                  >
+                    {s}
+                  </Chip>
+                );
+              })}
+              {result.risks.map((r) => (
+                <Chip key={`risk-${r}`} variant="danger">
+                  {r}
+                </Chip>
+              ))}
+              {result.negations.map((n) => (
+                <Chip key={`neg-${n}`} variant="negation">
+                  {n}
+                </Chip>
+              ))}
+            </div>
+          )}
+        </div>
 
-        {showFhir && (
-          <pre className="mt-3 max-h-[320px] overflow-auto rounded-[10px] border border-slate-200 bg-[#0F172A] p-4 text-[11.5px] leading-relaxed text-slate-100">
-            {JSON.stringify(result.fhir, null, 2)}
-          </pre>
+        {hasContext && (
+          <div className="mt-3">
+            <Disclosure label="Patient context (age, timing, medications)">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-[13px]">
+                {result.demographics.age !== null && (
+                  <>
+                    <dt className="text-slate-500">Age &amp; sex</dt>
+                    <dd className="font-semibold text-slate-900">
+                      {result.demographics.age}
+                      {result.demographics.sex ? ` · ${result.demographics.sex}` : ""}
+                      {result.demographics.age_group ? ` · ${result.demographics.age_group}` : ""}
+                    </dd>
+                  </>
+                )}
+                {result.temporal.phrases.length > 0 && (
+                  <>
+                    <dt className="text-slate-500">Timing</dt>
+                    <dd className="font-semibold text-slate-900">
+                      {result.temporal.phrases.join(" · ")}
+                      {result.temporal.minutes_since_onset !== null && (
+                        <span className="ml-1 text-slate-500 font-normal">
+                          ({result.temporal.minutes_since_onset} min)
+                        </span>
+                      )}
+                    </dd>
+                  </>
+                )}
+                {result.medications.length > 0 && (
+                  <>
+                    <dt className="text-slate-500">Meds detected</dt>
+                    <dd className="font-semibold text-slate-900">
+                      {result.medications.map((m) => m.name).join(", ")}
+                    </dd>
+                  </>
+                )}
+              </dl>
+            </Disclosure>
+          </div>
         )}
-      </Block>
+      </section>
 
-      {/* Pipeline timing strip — judge bait */}
-      <TimingStrip timings={result.timings} provenance={result.provenance ?? []} />
+      <hr className="my-6 border-t border-slate-100" />
+
+      {/* SECTION 3: Evidence — flat blockquote + inline disclosure. */}
+      <section id="evidence" className="scroll-mt-24">
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <h3 className="fc-section-title">The medical guidance we matched</h3>
+          <span className="text-[11px] text-slate-500">Cross-referenced — never invented</span>
+        </div>
+
+        <blockquote className="rounded-[var(--radius-control)] border-l-2 border-l-[var(--primary)] bg-[#EEF4FB]/60 px-4 py-3 text-[13.5px] leading-[20px] text-slate-800">
+          {result.ragEvidence}
+          <footer className="mt-1 text-[11px] font-semibold text-[var(--primary)] not-italic">
+            Source: {result.ragSource}
+          </footer>
+        </blockquote>
+
+        {result.ragMatches.length > 1 && (
+          <div className="mt-3">
+            <Disclosure label={`Show top ${result.ragMatches.length} retrieved guidelines`}>
+              <ul className="flex flex-col">
+                {result.ragMatches.map((m, i) => (
+                  <li
+                    key={m.id}
+                    className="flex items-center justify-between gap-3 py-2 border-b border-slate-100 last:border-b-0 text-[12px]"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-slate-800">
+                        #{i + 1} · {m.source}
+                      </div>
+                      {m.matched_keywords.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {m.matched_keywords.slice(0, 6).map((kw) => (
+                            <span
+                              key={`${m.id}-${kw}`}
+                              className="rounded bg-slate-100 px-1.5 py-0.5 text-[10.5px] text-slate-600"
+                            >
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <ScoreBar score={m.score} />
+                  </li>
+                ))}
+              </ul>
+            </Disclosure>
+          </div>
+        )}
+      </section>
+
+      <hr className="my-6 border-t border-slate-100" />
+
+      {/* SECTION 4: For care team — inline disclosures, no nested card. */}
+      <section id="technical" className="scroll-mt-24">
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <h3 className="fc-section-title">For your care team</h3>
+          <span className="text-[11px] text-slate-500">Technical view</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <Disclosure label="FHIR R4 output (JSON)">
+            <button
+              type="button"
+              onClick={() => setShowFhir(!showFhir)}
+              className="fc-focus-ring inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-slate-200 bg-white px-3 h-8 text-[12px] font-semibold text-slate-700 transition hover:border-[var(--primary)]/50 hover:text-[var(--primary)]"
+            >
+              <FileJson size={13} />
+              {showFhir ? "Hide JSON" : "Show JSON"}
+            </button>
+            {showFhir && (
+              <pre className="mt-3 max-h-[320px] overflow-auto rounded-[var(--radius-control)] border border-slate-200 bg-[#0F172A] p-3 text-[11px] leading-relaxed text-slate-100">
+                {JSON.stringify(result.fhir, null, 2)}
+              </pre>
+            )}
+          </Disclosure>
+          <Disclosure label="Pipeline timing &amp; provenance">
+            <TimingStrip timings={result.timings} provenance={result.provenance ?? []} />
+          </Disclosure>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1655,17 +1748,20 @@ function ProbBadge({ p }: { p: string }) {
 // ---------------------------------------------------------------------------
 
 function VitalsStrip({ vitals }: { vitals: Vital[] }) {
+  // Uses urgency-channel tokens from globals.css §10.3 — never reuses
+  // the urgency hex for decoration; status === warning maps to the
+  // medium urgency channel, critical to high.
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
       {vitals.slice(0, 8).map((v, i) => (
         <div
           key={i}
           className={[
-            "rounded-[10px] border px-3 py-2",
+            "rounded-[var(--radius-control)] border px-3 py-2",
             v.status === "critical"
-              ? "border-rose-300 bg-rose-50"
+              ? "border-[#FECACA] bg-[#FEF2F2]"
               : v.status === "warning"
-              ? "border-amber-300 bg-amber-50"
+              ? "border-[#FFE7BA] bg-[#FFF7ED]"
               : "border-slate-200 bg-white",
           ].join(" ")}
         >
@@ -1680,7 +1776,7 @@ function VitalsStrip({ vitals }: { vitals: Vital[] }) {
             <div
               className={[
                 "mt-0.5 text-[10px] font-bold uppercase",
-                v.status === "critical" ? "text-rose-700" : "text-amber-700",
+                v.status === "critical" ? "text-[#C62828]" : "text-[#E65100]",
               ].join(" ")}
             >
               {v.status}
@@ -1781,11 +1877,9 @@ function TimingStrip({
 
 function ThinksDrawer({
   result,
-  cascade,
   onClose,
 }: {
   result: TriageResult | null;
-  cascade: CascadeData | null;
   onClose: () => void;
 }) {
   return (
@@ -1896,13 +1990,9 @@ function ThinksDrawer({
             One <code>POST /ai/triage-cascade</code> fans the same narrative across four AI
             subsystems (intake, queue, nurse, provider) using <code>asyncio.gather</code>. Total
             wall time is dominated by the slowest subsystem because all three downstream calls run
-            in parallel. Each card carries its own tier badge so failures degrade gracefully.
-            {cascade && cascade.totalMs !== undefined && (
-              <div className="mt-2 rounded-[8px] bg-slate-50 px-3 py-2 text-[11.5px]">
-                Last cascade: {cascade.totalMs} ms total · queue tier {cascade.queue.source_tier} ·
-                nurse tier {cascade.nurse.source_tier} · provider tier {cascade.provider.source_tier}
-              </div>
-            )}
+            in parallel. Each card carries its own tier badge so failures degrade gracefully. The
+            cascade is now triggered from the nurse workspace once the case has been handed off,
+            and the patient sees its results live on their case status page.
           </ThinksSection>
 
           <ThinksSection icon={ShieldCheck} title="Why this isn't 'just GPT'">
@@ -1944,31 +2034,9 @@ function ThinksSection({
 }
 
 // ---------------------------------------------------------------------------
-// Shared primitives
+// Shared primitives — Chip used by ResultBlocks (symptom/risk/negation chips).
+// The legacy Block helper was retired in favour of the Disclosure pattern.
 // ---------------------------------------------------------------------------
-
-function Block({
-  eyebrow,
-  title,
-  helper,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  helper?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <div className="mb-2.5">
-        <div className="fc-eyebrow">{eyebrow}</div>
-        <div className="text-[14px] font-semibold text-slate-900">{title}</div>
-        {helper && <div className="text-[11.5px] text-slate-500">{helper}</div>}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 type ChipVariant = "primary" | "danger" | "negation";
 
@@ -2014,7 +2082,13 @@ function Chip({
 // FRONT-DESK HANDOFF BANNER
 // ---------------------------------------------------------------------------
 
-function FrontDeskHandoffBanner({
+/**
+ * FrontDeskHandoffSection — flat content (NOT a card). Sits inside the
+ * shared CarePlanCard, divided from siblings by <hr/>. Mirrors how
+ * provider-case ClinicalSummaryPanel divides sections — see spec
+ * 90-component-card.md "Never nest card/default inside card/default".
+ */
+function FrontDeskHandoffSection({
   urgency,
   state,
   caseId,
@@ -2029,108 +2103,427 @@ function FrontDeskHandoffBanner({
   syntheaName: string | null;
   onSend: () => void;
 }) {
-  const tone =
+  const chipClass =
     urgency === "CRITICAL"
-      ? { ring: "border-[#C62828]", chip: "bg-[#C62828] text-white" }
+      ? "bg-[#991B1B] text-white"
       : urgency === "URGENT"
-      ? { ring: "border-[#E53935]", chip: "bg-[#E53935] text-white" }
+      ? "bg-[#C62828] text-white"
       : urgency === "SEMI-URGENT"
-      ? { ring: "border-amber-400", chip: "bg-amber-400 text-amber-950" }
-      : { ring: "border-emerald-400", chip: "bg-emerald-500 text-white" };
+      ? "bg-[#E65100] text-white"
+      : "bg-[#2E7D32] text-white";
 
   if (state === "sent" && caseId) {
     return (
-      <section
-        className={`rounded-[14px] border bg-white p-5 shadow-[0_2px_4px_rgba(0,0,0,0.04)] ${tone.ring}`}
-        aria-live="polite"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
-              Handed off to front desk
-            </div>
-            <div className="mt-0.5 text-[14px] font-semibold text-slate-900">
-              Case <span className="font-mono">{caseId}</span> is now in the queue.
-            </div>
-            <p className="mt-1 text-[12px] leading-snug text-slate-600">
-              The case appears on the front-desk queue and will follow the same
-              triage → nurse → provider path as a real intake.
-            </p>
-          </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-3" aria-live="polite">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <a
-              href="/front-desk/queue"
-              className="rounded-[10px] bg-[#0F4C81] px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0d3f6c]"
-            >
-              Open front-desk queue →
-            </a>
-            <a
-              href={`/patient/status?caseId=${encodeURIComponent(caseId)}&urgency=${encodeURIComponent(urgency.toLowerCase())}`}
-              className="rounded-[10px] border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700 transition hover:border-[#0F4C81] hover:text-[#0F4C81]"
-            >
-              View patient status
-            </a>
+            <span className="inline-flex items-center h-5 px-2 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+              Handed off
+            </span>
+            <span className="fc-eyebrow">Front desk · live</span>
           </div>
+          <p className="mt-2 text-[14px] leading-[20px] text-slate-800">
+            Case <span className="font-mono font-semibold">{caseId}</span> is now in the queue. Your
+            nurse will run the AI cascade while reviewing — updates appear on your status page in real time.
+          </p>
         </div>
-      </section>
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href={`/patient/status?caseId=${encodeURIComponent(caseId)}&urgency=${encodeURIComponent(urgency.toLowerCase())}`}
+            className="fc-focus-ring inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--primary)] px-3 h-9 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0B3A66]"
+          >
+            Open my status
+            <ArrowRight size={13} />
+          </a>
+          <a
+            href="/front-desk/queue"
+            className="fc-focus-ring inline-flex items-center justify-center rounded-[var(--radius-control)] border border-slate-200 bg-white px-3 h-9 text-[13px] font-semibold text-slate-700 transition hover:border-[var(--primary)] hover:text-[var(--primary)]"
+          >
+            Front-desk queue
+          </a>
+        </div>
+      </div>
     );
   }
 
   return (
-    <section
-      className={`rounded-[14px] border bg-white p-5 shadow-[0_2px_4px_rgba(0,0,0,0.04)] ${tone.ring}`}
-      aria-live="polite"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tone.chip}`}
-            >
-              {urgency}
-            </span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Hand off to front desk
-            </span>
-          </div>
-          <div className="mt-1.5 text-[14px] font-semibold text-slate-900">
-            Create a real case from this AI verdict.
-          </div>
-          <p className="mt-1 max-w-[640px] text-[12px] leading-snug text-slate-600">
-            {syntheaName
-              ? `The case will be filed for ${syntheaName} (synthetic patient) and routed to the front-desk queue.`
-              : "The case will be filed as an anonymous walk-in and routed to the front-desk queue."}{" "}
-            From there it follows the existing triage → nurse → provider workflow.
-          </p>
-          {error ? (
-            <p className="mt-2 rounded-[8px] border border-amber-200 bg-amber-50 px-2 py-1 text-[11.5px] text-amber-900">
-              {error}
-            </p>
-          ) : null}
+    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3" aria-live="polite">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold uppercase tracking-wider ${chipClass}`}>
+            {urgency}
+          </span>
+          <span className="fc-eyebrow">Hand off to front desk</span>
         </div>
-        <button
-          type="button"
-          onClick={onSend}
-          disabled={state === "sending"}
-          className="shrink-0 rounded-[10px] bg-[#0F4C81] px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0d3f6c] disabled:cursor-not-allowed disabled:bg-slate-300"
-        >
-          {state === "sending" ? "Sending…" : "Send to front-desk queue"}
-        </button>
+        <p className="mt-2 text-[13.5px] leading-[20px] text-slate-700 max-w-[560px]">
+          {syntheaName
+            ? `The case will be filed for ${syntheaName} (synthetic patient) and routed to the front-desk queue.`
+            : "The case will be filed as an anonymous walk-in and routed to the front-desk queue."}{" "}
+          You&apos;ll confirm a few basics first so the team knows you when you arrive.
+        </p>
+        {error ? (
+          <p className="mt-2 inline-block fc-highlight-danger pl-3 py-1 text-[12px] text-slate-700">
+            {error}
+          </p>
+        ) : null}
       </div>
-    </section>
+      <button
+        type="button"
+        onClick={onSend}
+        disabled={state === "sending"}
+        className="fc-focus-ring shrink-0 inline-flex items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--primary)] px-4 h-10 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0B3A66] disabled:cursor-not-allowed disabled:bg-slate-300"
+      >
+        {state === "sending" ? "Sending…" : "Send to front desk"}
+        {state !== "sending" && <ArrowRight size={14} />}
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Send-to-Front-Desk confirmation modal
+// ---------------------------------------------------------------------------
+
+type HandoffPatientForm = {
+  fullName: string;
+  age: string;
+  sex: string;
+  phone: string;
+  email: string;
+  history: string;
+  additionalDetails: string;
+};
+
+function makeInitialHandoffForm(
+  synthea: SyntheaSelection | null,
+): HandoffPatientForm {
+  if (synthea?.patient) {
+    return {
+      fullName: formatSyntheaName(synthea.patient.label),
+      age: synthea.patient.age != null ? String(synthea.patient.age) : "",
+      sex: synthea.patient.sex ?? "",
+      phone: "",
+      email: "",
+      history: (synthea.patient.active_conditions ?? []).join("; "),
+      additionalDetails: "",
+    };
+  }
+  return {
+    fullName: "",
+    age: "",
+    sex: "",
+    phone: "",
+    email: "",
+    history: "",
+    additionalDetails: "",
+  };
+}
+
+function SendToFrontDeskModal({
+  urgency,
+  summary,
+  recommendedRoute,
+  sending,
+  error,
+  initial,
+  onCancel,
+  onSubmit,
+}: {
+  urgency: Urgency;
+  summary: string;
+  recommendedRoute: string;
+  sending: boolean;
+  error: string | null;
+  initial: HandoffPatientForm;
+  onCancel: () => void;
+  onSubmit: (form: HandoffPatientForm) => void;
+}) {
+  const [form, setForm] = useState<HandoffPatientForm>(initial);
+  const u = URG_STYLE[urgency];
+
+  const update = <K extends keyof HandoffPatientForm>(
+    key: K,
+    value: HandoffPatientForm[K],
+  ) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(form);
+  };
+
+  const ageValid =
+    form.age.trim() === "" ||
+    (Number.isFinite(Number(form.age)) && Number(form.age) >= 0 && Number(form.age) < 130);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="handoff-modal-title"
+    >
+      <button
+        type="button"
+        aria-label="Close confirmation"
+        onClick={sending ? undefined : onCancel}
+        className="absolute inset-0 bg-slate-900/45"
+      />
+      <form
+        onSubmit={handleSubmit}
+        className="relative z-10 flex max-h-[90vh] w-full max-w-[640px] flex-col overflow-hidden rounded-[var(--radius-dialog)] bg-white shadow-2xl"
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                style={{ backgroundColor: u.bg, color: u.text }}
+              >
+                {u.label}
+              </span>
+              <span className="fc-eyebrow">Confirm before handoff</span>
+            </div>
+            <h2
+              id="handoff-modal-title"
+              className="mt-1 text-[16px] font-semibold text-slate-900"
+            >
+              A few quick details for the front desk
+            </h2>
+            <p className="mt-1 text-[12.5px] text-slate-500">
+              These travel with your case so the front-desk team already knows you when you walk
+              up. You can leave fields blank — we&apos;ll file the rest as walk-in basics.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={sending}
+            className="fc-focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="mb-4 rounded-[var(--radius-card)] border border-slate-200 bg-slate-50 px-3 py-3 text-[12px] leading-snug text-slate-700">
+            <strong className="text-slate-900">Why we&apos;re sending this:</strong>{" "}
+            {summary || recommendedRoute || "Triage AI suggests follow-up."}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FieldGroup label="Full name" hint="Optional. We&apos;ll use a walk-in number if blank.">
+              <input
+                type="text"
+                value={form.fullName}
+                onChange={(e) => update("fullName", e.target.value)}
+                placeholder="e.g. Jane Doe"
+                className="fc-text-input"
+                disabled={sending}
+              />
+            </FieldGroup>
+            <FieldGroup label="Age" hint="Years.">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={form.age}
+                onChange={(e) => update("age", e.target.value.replace(/[^\d]/g, ""))}
+                placeholder="e.g. 32"
+                className="fc-text-input"
+                disabled={sending}
+              />
+              {!ageValid && (
+                <span className="text-[11px] text-rose-600">Age looks off — please double-check.</span>
+              )}
+            </FieldGroup>
+            <FieldGroup label="Sex">
+              <select
+                value={form.sex}
+                onChange={(e) => update("sex", e.target.value)}
+                className="fc-text-input"
+                disabled={sending}
+              >
+                <option value="">Prefer not to say</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+                <option value="nonbinary">Non-binary / other</option>
+              </select>
+            </FieldGroup>
+            <FieldGroup label="Phone" hint="So front desk can reach you while you wait.">
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) => update("phone", e.target.value)}
+                placeholder="(555) 123-4567"
+                className="fc-text-input"
+                disabled={sending}
+              />
+            </FieldGroup>
+            <FieldGroup label="Email">
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => update("email", e.target.value)}
+                placeholder="you@example.com"
+                className="fc-text-input"
+                disabled={sending}
+              />
+            </FieldGroup>
+            <FieldGroup label="Existing conditions" hint="Comma-separated.">
+              <input
+                type="text"
+                value={form.history}
+                onChange={(e) => update("history", e.target.value)}
+                placeholder="e.g. asthma, hypertension"
+                className="fc-text-input"
+                disabled={sending}
+              />
+            </FieldGroup>
+          </div>
+
+          <FieldGroup
+            label="Anything else the team should know?"
+            hint="Allergies, medications, or context."
+          >
+            <textarea
+              value={form.additionalDetails}
+              onChange={(e) => update("additionalDetails", e.target.value)}
+              rows={2}
+              className="fc-text-input min-h-[60px] resize-y"
+              disabled={sending}
+            />
+          </FieldGroup>
+
+          {error && (
+            <div className="mt-3 rounded-[var(--radius-control)] border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <footer className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-6 py-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={sending}
+            className="fc-focus-ring rounded-[var(--radius-control)] border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700 transition hover:border-slate-300 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={sending || !ageValid}
+            className="fc-focus-ring inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-[#0F4C81] px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0B3A66] disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {sending ? "Sending…" : "Confirm and send"}
+            {!sending && <ArrowRight size={14} />}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function FieldGroup({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-[12px] text-slate-700">
+      <span className="font-semibold text-slate-800">{label}</span>
+      {children}
+      {hint && <span className="text-[11px] text-slate-500">{hint}</span>}
+    </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CarePlanCard — single card grouping handoff, pharmacy, and community.
+//
+// Replaces the old pattern of stacking 4 sibling cards under the OutputPanel.
+// Per spec 90-component-card.md, sibling content blocks should live as
+// flat <section>s inside ONE card divided by <hr/>, not as nested cards.
+// ---------------------------------------------------------------------------
+
+function CarePlanCard({
+  urgency,
+  handoffState,
+  handoffCaseId,
+  handoffError,
+  syntheaName,
+  onSend,
+  suggestedDrug,
+  communityNarrative,
+}: {
+  urgency: Urgency;
+  handoffState: "idle" | "sending" | "sent" | "error";
+  handoffCaseId: string | null;
+  handoffError: string | null;
+  syntheaName: string | null;
+  onSend: () => void;
+  suggestedDrug: string;
+  communityNarrative: string;
+}) {
+  return (
+    <article className="mt-6 fc-card p-5 lg:p-6">
+      <header>
+        <div className="fc-eyebrow">Step 3 · Take action</div>
+        <h2 className="fc-section-title mt-1">
+          Send your case forward and find what you need next
+        </h2>
+        <p className="mt-1 text-[12.5px] leading-snug text-slate-500 max-w-[640px]">
+          One place to hand the case to the team, locate your medication, and see how others
+          described similar symptoms.
+        </p>
+      </header>
+
+      <hr className="my-5 border-t border-slate-100" />
+
+      <section id="handoff" className="scroll-mt-24">
+        <FrontDeskHandoffSection
+          urgency={urgency}
+          state={handoffState}
+          caseId={handoffCaseId}
+          error={handoffError}
+          syntheaName={syntheaName}
+          onSend={onSend}
+        />
+      </section>
+
+      <hr className="my-5 border-t border-slate-100" />
+
+      <section id="pharmacy" className="scroll-mt-24">
+        <PharmacyFinder suggestedDrug={suggestedDrug} flat />
+      </section>
+
+      {communityNarrative.length >= 12 && (
+        <>
+          <hr className="my-5 border-t border-slate-100" />
+          <section id="community" className="scroll-mt-24">
+            <CommunityPanel narrative={communityNarrative} flat />
+          </section>
+        </>
+      )}
+    </article>
   );
 }
 
 function DisclaimerFooter() {
   return (
-    <footer className="mt-6 rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-relaxed text-amber-900">
+    <footer className="mt-6 fc-card fc-highlight-warn p-4 text-[12px] leading-relaxed text-slate-700">
       <div className="flex items-start gap-2">
-        <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-[#B45309]" />
         <div>
-          <strong>For clinical decision support only.</strong> This tool does not replace
-          professional medical judgment, diagnosis, or treatment. Demo scenarios are synthetic.
-          Production deployment would require SaMD review, HIPAA compliance, and SMART on FHIR
-          integration with a certified EHR or care platform such as Gazuntite.
+          <strong className="text-slate-900">For clinical decision support only.</strong> This
+          tool does not replace professional medical judgment, diagnosis, or treatment. Demo
+          scenarios are synthetic. Production deployment would require SaMD review, HIPAA
+          compliance, and SMART on FHIR integration with a certified EHR or care platform such as
+          Gazuntite.
         </div>
       </div>
     </footer>
