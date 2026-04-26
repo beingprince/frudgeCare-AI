@@ -108,6 +108,47 @@ const RED_FLAG_PROTOCOLS = [
   { id: "adherence",label: "Medication adherence check",     hint: "Last dose, refill status" },
 ];
 
+/* ─────────── Demo vitals presets ───────────
+ *
+ * Three canned cases keyed to the bands the interpret() function below
+ * already recognises, so picking one in the dropdown live-fills the form
+ * AND drives the section tone (default / warn / danger) and per-field
+ * status pills without any extra wiring.
+ *
+ *   normal   — healthy adult check-in. Every band lands "normal".
+ *   warning  — early viral illness. BP stage 2, HR tachycardia,
+ *              temp fever, SpO2 mildly reduced, RR tachypnea.
+ *   critical — septic shock pattern. Hyperthermia + hypoxia trigger
+ *              critical interps; supporting BP/HR/RR add warnings.
+ */
+type DemoVitalsKey = "" | "normal" | "warning" | "critical";
+
+const DEMO_VITALS_PRESETS: Array<{
+  key: Exclude<DemoVitalsKey, "">;
+  label: string;
+  oneLiner: string;
+  values: Omit<Vitals, "notTakenReason">;
+}> = [
+  {
+    key: "normal",
+    label: "Normal — healthy adult check-in",
+    oneLiner: "All vitals inside expected ranges. No flags.",
+    values: { bpSys: "118", bpDia: "76", hr: "72", tempF: "98.6", spo2: "98", rr: "16" },
+  },
+  {
+    key: "warning",
+    label: "Warning — early viral illness",
+    oneLiner: "Stage-2 BP, mild fever, tachycardia, tachypnea. Recheck.",
+    values: { bpSys: "144", bpDia: "92", hr: "121", tempF: "101.2", spo2: "94", rr: "22" },
+  },
+  {
+    key: "critical",
+    label: "Critical — septic shock pattern",
+    oneLiner: "Hyperthermia + hypoxia. Sepsis screen, escalate now.",
+    values: { bpSys: "78", bpDia: "48", hr: "132", tempF: "104.1", spo2: "88", rr: "28" },
+  },
+];
+
 /* ─────────── Vitals helpers ─────────── */
 
 interface VitalsInterp { status: "normal" | "warning" | "critical"; note: string }
@@ -199,6 +240,7 @@ export default function NurseCaseWorkspace() {
   const [vitals, setVitals] = useState<Vitals>({
     bpSys: "", bpDia: "", hr: "", tempF: "", spo2: "", rr: "", notTakenReason: "",
   });
+  const [demoVitalKey, setDemoVitalKey] = useState<DemoVitalsKey>("");
   const [formData, setFormData] = useState<NurseForm>({
     onset: "",
     esiLevel: "3",
@@ -303,6 +345,7 @@ export default function NurseCaseWorkspace() {
     setVitals({
       bpSys: "", bpDia: "", hr: "", tempF: "", spo2: "", rr: "", notTakenReason: "",
     });
+    setDemoVitalKey("");
     setFormData({
       onset: "",
       esiLevel: "3",
@@ -776,12 +819,51 @@ export default function NurseCaseWorkspace() {
               }
               info="Primary objective data set. Each field is range-checked as you type so outliers are flagged before handoff."
             >
+              {/* Demo vitals — pick a canned case and the six fields below
+                  fill instantly. The same interpret() function then drives
+                  per-field pills + section tone live, so judges can see
+                  the normal / warning / critical paths in one click. */}
+              <div className="mb-4 rounded-[10px] border border-dashed border-slate-300 bg-slate-50/60 p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-slate-600">
+                    <Sparkles size={14} className="text-[#0F4C81]" />
+                    Demo vitals
+                    <span className="rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[9.5px] font-bold tracking-wider text-slate-500">
+                      Testing
+                    </span>
+                  </div>
+                  <select
+                    value={demoVitalKey}
+                    onChange={(e) => {
+                      const next = e.target.value as DemoVitalsKey;
+                      setDemoVitalKey(next);
+                      if (!next) return;
+                      const preset = DEMO_VITALS_PRESETS.find(p => p.key === next);
+                      if (!preset) return;
+                      setVitals({ ...preset.values, notTakenReason: "" });
+                      setIsValidated(false);
+                    }}
+                    className="h-9 rounded-[8px] border border-slate-300 bg-white px-3 text-[13px] outline-none focus:border-[#0F4C81] sm:w-[260px]"
+                  >
+                    <option value="">Select a case to auto-fill…</option>
+                    {DEMO_VITALS_PRESETS.map(p => (
+                      <option key={p.key} value={p.key}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {demoVitalKey && (
+                  <p className="mt-2 text-[12px] leading-snug text-slate-600">
+                    {DEMO_VITALS_PRESETS.find(p => p.key === demoVitalKey)?.oneLiner}
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <VitalField
                   label="BP systolic"
                   unit="mmHg"
                   value={vitals.bpSys}
-                  onChange={v => setVitals(s => ({ ...s, bpSys: v }))}
+                  onChange={v => { setVitals(s => ({ ...s, bpSys: v })); setDemoVitalKey(""); }}
                   interp={vInterp.bp}
                   placeholder="120"
                 />
@@ -789,14 +871,14 @@ export default function NurseCaseWorkspace() {
                   label="BP diastolic"
                   unit="mmHg"
                   value={vitals.bpDia}
-                  onChange={v => setVitals(s => ({ ...s, bpDia: v }))}
+                  onChange={v => { setVitals(s => ({ ...s, bpDia: v })); setDemoVitalKey(""); }}
                   placeholder="80"
                 />
                 <VitalField
                   label="Heart rate"
                   unit="bpm"
                   value={vitals.hr}
-                  onChange={v => setVitals(s => ({ ...s, hr: v }))}
+                  onChange={v => { setVitals(s => ({ ...s, hr: v })); setDemoVitalKey(""); }}
                   interp={vInterp.hr}
                   placeholder="72"
                 />
@@ -804,7 +886,7 @@ export default function NurseCaseWorkspace() {
                   label="Temperature"
                   unit="°F"
                   value={vitals.tempF}
-                  onChange={v => setVitals(s => ({ ...s, tempF: v }))}
+                  onChange={v => { setVitals(s => ({ ...s, tempF: v })); setDemoVitalKey(""); }}
                   interp={vInterp.temp}
                   placeholder="98.6"
                 />
@@ -812,7 +894,7 @@ export default function NurseCaseWorkspace() {
                   label="SpO₂"
                   unit="%"
                   value={vitals.spo2}
-                  onChange={v => setVitals(s => ({ ...s, spo2: v }))}
+                  onChange={v => { setVitals(s => ({ ...s, spo2: v })); setDemoVitalKey(""); }}
                   interp={vInterp.spo2}
                   placeholder="97"
                 />
@@ -820,7 +902,7 @@ export default function NurseCaseWorkspace() {
                   label="Respiratory rate"
                   unit="/min"
                   value={vitals.rr}
-                  onChange={v => setVitals(s => ({ ...s, rr: v }))}
+                  onChange={v => { setVitals(s => ({ ...s, rr: v })); setDemoVitalKey(""); }}
                   interp={vInterp.rr}
                   placeholder="16"
                 />
