@@ -66,7 +66,10 @@ The same engine output is then fanned out by an orchestrator at `/ai/triage-casc
 The same engine and the same outputs power a unified `/console` screen that has tabs for the four staff panels. Front Desk Queue. Nurse Triage. Provider Daily List. Operations Dashboard. Operators reach any panel without signing in. A global command palette opened by Cmd plus K or Ctrl plus K accepts natural language requests such as "open the queue", "show provider daily", or "patient Maria Lopez". Deterministic keyword routing fires first. The language model is the fallback for clinical questions.
 
 
-Two pages and one keyboard shortcut replace what used to be twenty three separate routes.
+A third screen at `/agent` exposes the system as an autonomous agent. It hands six clinical tools to Gemini and runs a deterministic workflow that the language model uses to commit a final urgency call. The tools are the red flag rule engine, the clinical guideline lookup, the vital sign scoring evaluator, the drug interaction checker, the ICD-10 coder, and the provider escalation handler. Every tool is a thin wrapper around the same local knowledge base that powers the cascade, so the agent never hallucinates clinical content. The full reasoning trace is rendered as a step by step timeline so judges can see exactly what the agent did, what each tool returned, and how the verdict was synthesised. When the language model is rate limited or unreachable, a deterministic synthesis path produces the verdict from the same evidence and the user interface labels which path ran. See `services/ai-engine/agent_react.py` for the workflow and `services/ai-engine/agent_tools.py` for the tool surface.
+
+
+Three pages and one keyboard shortcut replace what used to be twenty three separate routes.
 
 
 ### What the system does not do
@@ -189,13 +192,16 @@ The web app runs on `http://localhost:3000` and the AI engine runs on `http://lo
 ### What you should see
 
 
-The landing page has two buttons. Patient Triage Demo and Staff Console.
+The landing page has three buttons. Patient Triage Demo. Agentic Triage. Staff Console.
 
 
 Pressing Cmd plus K on macOS or Ctrl plus K on Windows and Linux opens the AI command palette anywhere in the application.
 
 
 The Patient Triage Demo has four pre filled scenarios. Chest Pain. Stroke Signs. Sepsis Signs. Paediatric Fever. Pick one, submit, and the four AI layers fire in sequence with their tier badges visible.
+
+
+The Agentic Triage screen at `/agent` has four pre filled scenarios. Crushing chest pain. Diabetic shaky and confused. Sudden facial droop. Mild two day headache. Pick one, hit Run Agent, and watch the agent execute six tools against the local knowledge base, ask Gemini to synthesise the verdict, and commit the urgency call. The full step by step trace is rendered as a vertical timeline. Each step is expandable to show the actual `args` and `result` JSON.
 
 
 The Staff Console has four tabs. Front Desk Queue. Nurse Triage. Provider Daily List. Operations Dashboard. All four pull from the same AI engine.
@@ -273,10 +279,12 @@ frudgeCareAI/
   apps/
     web/                         Next.js 16 frontend
       src/app/
-        page.tsx                 Landing page with the two button entry
+        page.tsx                 Landing page with the three button entry
         triage/                  Patient triage demo on a single screen
+        agent/                   Agentic triage with tool call timeline
         console/                 Unified staff shell with four tabs
-        api/ai/                  Concierge, analyze intake, triage cascade
+        api/ai/                  Concierge, analyze intake, triage cascade,
+                                 agentic triage proxy
       src/components/common/CommandPalette.tsx
                                  Global Cmd plus K palette
 
@@ -284,6 +292,9 @@ frudgeCareAI/
     ai-engine/                   Python FastAPI AI engine
       main.py                    Endpoints, NLP, RAG, FHIR builder
       tiered_ai.py               Language model cascade with safe fallback
+      agent_tools.py             Six tool registry shared with the agent
+      agent_react.py             Scripted agent with Gemini synthesis and
+                                 deterministic fallback
       knowledge_base/            Synthea FHIR, vital ranges, ICD-10 reference
 
   projects/
