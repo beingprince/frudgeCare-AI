@@ -1562,7 +1562,49 @@ def _safe_card(res: Any, default: Dict[str, Any]) -> Dict[str, Any]:
     return default
 
 
+# ======================================================================
+# /ai/agentic-triage — Gemini ReAct agent with tool calling
+# ======================================================================
+#
+# This is the agentic layer on top of the deterministic cascade. The agent
+# is given a clinical tool surface (see agent_tools.py) and decides which
+# tool to call in what order until it commits to an urgency verdict. The
+# full reasoning trace is returned so the UI can render a step-by-step
+# timeline of "what the agent did".
+#
+# Contract is intentionally narrow so the BFF and UI can render it without
+# guessing. Always returns 200 with a structured response, even on internal
+# failure (the response then carries agent_available=false).
+
+from agent_react import run_agentic_triage as _run_agentic_triage
+
+
+class AgenticTriageRequest(BaseModel):
+    model_config = {"extra": "ignore"}
+
+    narrative: str
+    age: Optional[int] = None
+    sex: Optional[str] = None
+    known_medications: Optional[List[str]] = None
+    measured_vitals: Optional[Dict[str, Any]] = None
+
+
+@app.post("/ai/agentic-triage", dependencies=[Depends(verify_internal_secret)])
+async def agentic_triage(request: AgenticTriageRequest):
+    if not request.narrative or not request.narrative.strip():
+        raise HTTPException(status_code=422, detail="narrative is required")
+    return _run_agentic_triage(
+        client=client,
+        narrative=request.narrative,
+        age=request.age,
+        sex=request.sex,
+        known_medications=request.known_medications,
+        measured_vitals=request.measured_vitals,
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
-    # Port 8001 matches the Next.js default (AI_ENGINE_URL and NEXT_PUBLIC_AI_ENGINE_URL).
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    # Port 8002 because 8001 has a Windows kernel zombie socket binding
+    # from an earlier crashed process; .env.local points BFF callers here.
+    uvicorn.run(app, host="0.0.0.0", port=8002)

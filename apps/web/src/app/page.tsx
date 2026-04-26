@@ -42,6 +42,16 @@ const ENTRY_POINTS = [
     accent: "#1565C0",
   },
   {
+    title: "Agentic Triage",
+    eyebrow: "Tool-calling agent",
+    href: "/agent",
+    icon: Sparkles,
+    description:
+      "An autonomous agent that runs six clinical tools against the local knowledge base, then asks Gemini to synthesise the final urgency call. Renders the full reasoning trace as a step-by-step timeline.",
+    bullets: ["Red-flag rules", "Vitals scoring", "Drug interactions", "ICD-10 coding"],
+    accent: "#0D47A1",
+  },
+  {
     title: "Staff Console",
     eyebrow: "Unified shell",
     href: "/console",
@@ -49,7 +59,7 @@ const ENTRY_POINTS = [
     description:
       "Front Desk queue, Nurse triage, Provider daily list and Operations KPIs collapsed into one tabbed surface. No sign-in, no role switcher — every panel is one click away.",
     bullets: ["Queue prioritization", "Vital sign validation", "Daily encounters", "Funnel analytics"],
-    accent: "#0D47A1",
+    accent: "#1A237E",
   },
 ];
 
@@ -131,8 +141,8 @@ export default function Home() {
             </p>
           </motion.div>
 
-          {/* Two big CTAs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Three big CTAs */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {ENTRY_POINTS.map((p, i) => {
               const Icon = p.icon;
               return (

@@ -60,8 +60,8 @@ const HEADER_HEIGHT     = 64;
 // MVP collapse: /sign-in and /auth/* pages were deleted (demo runs gate-free).
 // /console is the new unified AI shell — it carries its own header + tabs and
 // must NOT be wrapped in the staff sidebar chrome.
-const BYPASS_EXACT = new Set<string>(["/", "/triage", "/console"]);
-const BYPASS_PREFIXES = ["/patient/", "/triage/", "/console/"];
+const BYPASS_EXACT = new Set<string>(["/", "/triage", "/console", "/agent"]);
+const BYPASS_PREFIXES = ["/patient/", "/triage/", "/console/", "/agent/"];
 
 interface NavItem {
   icon: React.ElementType;
