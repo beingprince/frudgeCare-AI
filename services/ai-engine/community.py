@@ -94,6 +94,29 @@ def _tokenise(text: str) -> List[str]:
     return [tok for tok in cleaned.split() if tok and tok not in _STOPWORDS and len(tok) > 2]
 
 
+def _condense_query(query: str, *, max_terms: int = 6) -> str:
+    """Reddit search returns 0 hits for verbose multi-sentence narratives
+    (e.g. the curated Synthea seeds). Derive a tighter keyword query
+    by keeping the top-N most frequent clinical tokens, preserving
+    their original order so the phrase still reads naturally.
+    """
+    tokens = _tokenise(query)
+    if len(tokens) <= max_terms:
+        return query.strip()
+    seen_first: Dict[str, int] = {}
+    counts: Dict[str, int] = {}
+    for idx, tok in enumerate(tokens):
+        seen_first.setdefault(tok, idx)
+        counts[tok] = counts.get(tok, 0) + 1
+    ranked = sorted(
+        counts.items(),
+        key=lambda kv: (-kv[1], seen_first.get(kv[0], 0)),
+    )
+    chosen = [tok for tok, _ in ranked[:max_terms]]
+    chosen.sort(key=lambda tok: seen_first.get(tok, 0))
+    return " ".join(chosen)
+
+
 def _similarity(query_tokens: List[str], post_tokens: List[str]) -> float:
     if not query_tokens or not post_tokens:
         return 0.0
@@ -232,11 +255,15 @@ async def search_similar(
             "fetched_at": _now_iso(),
         }
 
+    # Reddit search returns nothing for verbose multi-sentence inputs;
+    # condense to a top-N keyword phrase first.
+    search_query = _condense_query(cleaned)
+
     # NOTE: Do not set Accept here — Reddit 403s us if we ask for
     # application/json explicitly. See _USER_AGENT comment above.
     headers = {"User-Agent": _USER_AGENT}
     async with httpx.AsyncClient(headers=headers, timeout=_TIMEOUT_SECONDS, follow_redirects=True) as client:
-        tasks = [_fetch_subreddit(client, sub, cleaned) for sub in subs]
+        tasks = [_fetch_subreddit(client, sub, search_query) for sub in subs]
         results = await asyncio.gather(*tasks, return_exceptions=False)
 
     aggregated: List[Dict[str, object]] = []

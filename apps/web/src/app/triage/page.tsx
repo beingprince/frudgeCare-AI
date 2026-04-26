@@ -46,6 +46,7 @@ import {
 import { RoleChip } from "@/components/common/RoleChip";
 import { SyntheaPicker, type SyntheaSelection } from "./SyntheaPicker";
 import { CommunityPanel } from "./CommunityPanel";
+import { PharmacyFinder } from "./PharmacyFinder";
 
 // ---------------------------------------------------------------------------
 // Scenarios — the demo's secret weapon. One click = filled textarea.
@@ -552,6 +553,12 @@ export default function TriagePage() {
         {result && !error && submittedNarrative.length >= 12 && (
           <div className="mt-5">
             <CommunityPanel narrative={submittedNarrative} />
+          </div>
+        )}
+
+        {result && !error && (
+          <div className="mt-5">
+            <PharmacyFinder suggestedDrug={result.medications[0]?.name ?? ""} />
           </div>
         )}
 

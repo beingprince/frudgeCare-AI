@@ -11,11 +11,80 @@ just return an empty array and the UI will hide the picker.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 _DEFAULT_PATH = Path(__file__).parent / "sample_patients" / "patients.json"
+
+# Synthea generates verbose RxNorm-style medication labels like
+# "24 HR metoprolol succinate 100 MG Extended Release Oral Tablet". The
+# /triage UI and the /pharmacy/search BFF want the bare ingredient
+# ("metoprolol"), so we strip dosage / formulation tokens at load time.
+# Keeping the raw strings in patients.json preserves provenance.
+# Iteratively strip nested () [] {} groups so combo packs collapse,
+# then nuke dosages, units, and formulation/salt words.
+_BRACKET_PATTERNS = (
+    re.compile(r"\{[^{}]*\}"),
+    re.compile(r"\[[^\[\]]*\]"),
+    re.compile(r"\([^()]*\)"),
+)
+_DOSAGE_UNIT_PATTERN = re.compile(
+    r"\b\d+(?:\.\d+)?\s*(?:hr|hour|hours|mg|mcg|ml|g|iu|actuat)\b",
+    re.IGNORECASE,
+)
+_BARE_NUMBER_PATTERN = re.compile(r"\b\d+(?:\.\d+)?\b")
+_UNIT_AFTER_SLASH_PATTERN = re.compile(r"/\s*(?:actuat|ml|mg|mcg|iu|hr)\b", re.IGNORECASE)
+_FORMULATION_PATTERN = re.compile(
+    r"\b("
+    r"oral|tablet|tablets|capsule|capsules|chewable|extended|release|"
+    r"injection|injectable|suspension|spray|mucosal|nasal|topical|"
+    r"solution|patch|cream|ointment|drops|prefilled|syringe|inhaler|"
+    r"inhalation|pack|actuat|metered|dose|hcl|sodium|chloride|sulfate|"
+    r"succinate|hydrochloride|maleate|tartrate|fumarate|inert|ingredients"
+    r")\b",
+    re.IGNORECASE,
+)
+_BRAND_DAY_TAIL = re.compile(r"\s+\d+\s*day\b.*$", re.IGNORECASE)
+
+
+_BRAND_HINT = re.compile(r"\[([^\[\]]+)\]")
+
+
+def _clean_med(name: str) -> str:
+    # If the raw FHIR string ends with a brand bracket like
+    # "... Pack [Trinessa 28 Day]", remember it as a fallback in case
+    # cleaning the technical noise leaves us with nothing usable.
+    brand_hint: str = ""
+    brand_match = _BRAND_HINT.findall(name)
+    if brand_match:
+        candidate = brand_match[-1].strip()
+        candidate = _BRAND_DAY_TAIL.sub("", candidate).strip()
+        if candidate:
+            brand_hint = candidate
+
+    cleaned = name
+    # Iteratively peel nested groups until stable.
+    for _ in range(5):
+        before = cleaned
+        for pat in _BRACKET_PATTERNS:
+            cleaned = pat.sub(" ", cleaned)
+        if cleaned == before:
+            break
+    cleaned = _DOSAGE_UNIT_PATTERN.sub(" ", cleaned)
+    cleaned = _UNIT_AFTER_SLASH_PATTERN.sub(" ", cleaned)
+    cleaned = _BARE_NUMBER_PATTERN.sub(" ", cleaned)
+    cleaned = _FORMULATION_PATTERN.sub(" ", cleaned)
+    cleaned = _BRAND_DAY_TAIL.sub("", cleaned)
+    cleaned = re.sub(r"\s*/\s*", " / ", cleaned)
+    cleaned = re.sub(r"(?:\s*/\s*){2,}", " / ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,;:.-/")
+    if cleaned:
+        return cleaned
+    if brand_hint:
+        return brand_hint
+    return name
 
 
 @dataclass
@@ -75,7 +144,9 @@ def _load_from_disk(path: Path = _DEFAULT_PATH) -> List[PatientSummary]:
                 city=str(entry.get("city", "")),
                 state=str(entry.get("state", "")),
                 active_conditions=list(entry.get("active_conditions") or []),
-                active_medications=list(entry.get("active_medications") or []),
+                active_medications=[
+                    _clean_med(m) for m in (entry.get("active_medications") or [])
+                ],
                 allergies=list(entry.get("allergies") or []),
                 last_vitals=dict(entry.get("last_vitals") or {}),
                 narrative_seed=str(entry.get("narrative_seed", "")),

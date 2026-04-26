@@ -1148,6 +1148,17 @@ from community import (
     DEFAULT_SUBREDDITS as _DEFAULT_COMMUNITY_SUBS,
     search_similar as _community_search_similar,
 )
+from pharmacy import search_pharmacies as _pharmacy_search
+
+
+@app.get("/pharmacy/search")
+async def pharmacy_search(drug: str = "", zip: str = ""):
+    """Find pharmacies near `zip` that carry `drug`.
+
+    Falls back to a curated demo set when TAVILY_API_KEY isn't set
+    on the server, so the kiosk demo always renders something.
+    """
+    return await _pharmacy_search(drug, zip)
 
 
 @app.get("/community/similar")
