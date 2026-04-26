@@ -89,3 +89,10 @@ documents/
 *.bak
 *.tmp
 *.local.*
+
+# Synthea raw bundle extraction (large, regenerable from the public zip).
+# The curated slim summaries in synthea/sample_patients/ ARE committed.
+services/ai-engine/synthea/_extracted/
+
+# Agent debug traces dropped at the repo root by ad-hoc smoke tests.
+.agent-trace.json

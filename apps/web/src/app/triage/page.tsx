@@ -44,6 +44,7 @@ import {
   Zap,
 } from "lucide-react";
 import { RoleChip } from "@/components/common/RoleChip";
+import { SyntheaPicker, type SyntheaSelection } from "./SyntheaPicker";
 
 // ---------------------------------------------------------------------------
 // Scenarios — the demo's secret weapon. One click = filled textarea.
@@ -420,6 +421,18 @@ export default function TriagePage() {
     setCascadeError(null);
   };
 
+  const handlePickSynthea = (selection: SyntheaSelection) => {
+    // Selecting a real Synthea patient supersedes any active scenario;
+    // the textarea, age group, and any downstream state are reset.
+    setActiveScenarioId(null);
+    setSymptomText(selection.patient.narrative_seed);
+    setAgeGroup(selection.ageGroup);
+    setResult(null);
+    setError(null);
+    setCascade(null);
+    setCascadeError(null);
+  };
+
   const handleAnalyze = async () => {
     setLoading(true);
     setResult(null);
@@ -499,6 +512,7 @@ export default function TriagePage() {
               ageGroup={ageGroup}
               setAgeGroup={setAgeGroup}
               onPickScenario={handlePickScenario}
+              onPickSynthea={handlePickSynthea}
               activeScenarioId={activeScenarioId}
               loading={loading}
               canSubmit={canSubmit}
@@ -625,6 +639,7 @@ function InputPanel({
   ageGroup,
   setAgeGroup,
   onPickScenario,
+  onPickSynthea,
   activeScenarioId,
   loading,
   canSubmit,
@@ -635,6 +650,7 @@ function InputPanel({
   ageGroup: AgeGroup;
   setAgeGroup: (a: AgeGroup) => void;
   onPickScenario: (s: Scenario) => void;
+  onPickSynthea: (s: SyntheaSelection) => void;
   activeScenarioId: string | null;
   loading: boolean;
   canSubmit: boolean;
@@ -646,7 +662,7 @@ function InputPanel({
         <div>
           <div className="fc-eyebrow">Step 1</div>
           <h1 className="fc-page-title">Describe the patient</h1>
-          <p className="fc-page-subtitle">Pick a scenario or write a free-text presentation.</p>
+          <p className="fc-page-subtitle">Pick a scenario, load a real Synthea patient, or write your own.</p>
         </div>
       </div>
 
@@ -687,6 +703,8 @@ function InputPanel({
           );
         })}
       </div>
+
+      <SyntheaPicker onSelect={onPickSynthea} />
 
       <label htmlFor="symptoms" className="mb-1.5 block text-[12px] font-semibold text-slate-700">
         Patient symptom description

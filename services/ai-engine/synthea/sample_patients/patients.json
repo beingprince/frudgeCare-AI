@@ -1,0 +1,325 @@
+{
+  "generated_from": "synthea\\_extracted",
+  "generated_at": "2026-04-26T01:06:17.289946+00:00",
+  "count": 10,
+  "patients": [
+    {
+      "id": "9b2a3600-1c8a-52ec-6864-b45f6f6ce66c",
+      "label": "Giovanni385 P. (65M, abnormal findings diagnostic imaging heart+coronary circulat (finding), on metoprolol)",
+      "bucket": "geriatric_cardiac",
+      "age": 65,
+      "sex": "male",
+      "postal_code": "00000",
+      "city": "Grafton",
+      "state": "MA",
+      "active_conditions": [
+        "Abnormal findings diagnostic imaging heart+coronary circulat (finding)",
+        "Body mass index 30+ - obesity (finding)",
+        "Chronic intractable migraine without aura (disorder)",
+        "Chronic pain (finding)",
+        "Dependent drug abuse (disorder)",
+        "History of coronary artery bypass grafting (situation)",
+        "Hyperlipidemia (disorder)",
+        "Ischemic heart disease (disorder)"
+      ],
+      "active_medications": [
+        "24 HR metoprolol succinate 100 MG Extended Release Oral Tablet",
+        "Clopidogrel 75 MG Oral Tablet",
+        "Nitroglycerin 0.4 MG/ACTUAT Mucosal Spray",
+        "Simvastatin 10 MG Oral Tablet",
+        "Simvastatin 20 MG Oral Tablet"
+      ],
+      "allergies": [],
+      "last_vitals": {
+        "bmi": 30.2,
+        "pulse": 88.0,
+        "respiratory": 15.0,
+        "glucose": 78.2
+      },
+      "narrative_seed": "65 year old male presenting today for evaluation. Reports concerns related to abnormal findings diagnostic imaging heart+coronary circulat (finding). Active problems include body mass index 30+ - obesity (finding), chronic intractable migraine without aura (disorder), chronic pain (finding), dependent drug abuse (disorder). Current medications: metoprolol, clopidogrel, nitroglycerin, simvastatin, simvastatin. Most recent vitals: HR 88."
+    },
+    {
+      "id": "27fbdb27-8270-859f-1c0a-7e1bb32d21f6",
+      "label": "Freeda113 Lawana430 S. (40F, chronic low back pain (finding), on acetaminophen)",
+      "bucket": "female_reproductive",
+      "age": 40,
+      "sex": "female",
+      "postal_code": "00000",
+      "city": "Freetown",
+      "state": "MA",
+      "active_conditions": [
+        "Chronic low back pain (finding)",
+        "Chronic pain (finding)",
+        "Has a criminal record (finding)",
+        "Past pregnancy history of miscarriage (situation)"
+      ],
+      "active_medications": [
+        "Acetaminophen 300 MG / Hydrocodone Bitartrate 5 MG Oral Tablet",
+        "{7 (ethinyl estradiol 0.035 MG / norgestimate 0.18 MG Oral Tablet) / 7 (ethinyl estradiol 0.035 MG / norgestimate 0.215 MG Oral Tablet) / 7 (ethinyl estradiol 0.035 MG / norgestimate 0.25 MG Oral Tablet) / 7 (inert ingredients 1 MG Oral Tablet) } Pack [Trinessa 28 Day]"
+      ],
+      "allergies": [],
+      "last_vitals": {
+        "bmi": 27.9,
+        "pulse": 69.0,
+        "respiratory": 14.0
+      },
+      "narrative_seed": "40 year old female presenting today for evaluation. Reports concerns related to chronic low back pain (finding). Active problems include chronic pain (finding), has a criminal record (finding), past pregnancy history of miscarriage (situation). Current medications: acetaminophen, (ethinyl. Most recent vitals: HR 69."
+    },
+    {
+      "id": "073a5bc6-2401-e5fa-1853-0bf34cd8f533",
+      "label": "Kiana854 Tawna357 G. (11F, childhood asthma (disorder), on fluticasone)",
+      "bucket": "pediatric_acute",
+      "age": 11,
+      "sex": "female",
+      "postal_code": "01983",
+      "city": "Topsfield",
+      "state": "MA",
+      "active_conditions": [
+        "Childhood asthma (disorder)"
+      ],
+      "active_medications": [
+        "120 ACTUAT fluticasone propionate 0.11 MG/ACTUAT Metered Dose Inhaler [Flovent]",
+        "albuterol 0.21 MG/ML Inhalation Solution"
+      ],
+      "allergies": [],
+      "last_vitals": {
+        "pulse": 72.0,
+        "respiratory": 16.0,
+        "bmi": 18.0
+      },
+      "narrative_seed": "11 year old female presenting today for evaluation. Reports concerns related to childhood asthma (disorder). Current medications: fluticasone, albuterol. Most recent vitals: HR 72."
+    },
+    {
+      "id": "45d4e12b-e7cc-3d61-364f-3ae5d37db5c6",
+      "label": "Orlando897 Hiram237 B. (2M, general check-up, on loratadine)",
+      "bucket": "unassigned",
+      "age": 2,
+      "sex": "male",
+      "postal_code": "02142",
+      "city": "Cambridge",
+      "state": "MA",
+      "active_conditions": [],
+      "active_medications": [
+        "Loratadine 5 MG Chewable Tablet",
+        "NDA020800 0.3 ML Epinephrine 1 MG/ML Auto-Injector"
+      ],
+      "allergies": [
+        "Allergic disposition (finding)",
+        "Animal dander (substance)",
+        "Aspirin",
+        "Glycine max (substance)",
+        "Grass pollen (substance)",
+        "Latex (substance)"
+      ],
+      "last_vitals": {
+        "pulse": 89.0,
+        "respiratory": 13.0
+      },
+      "narrative_seed": "2 year old male presenting today for evaluation. Current medications: loratadine, epinephrine. Most recent vitals: HR 89."
+    },
+    {
+      "id": "1fbd37d3-7c6e-9104-0b48-05170493bcd8",
+      "label": "Chad48 Conrad619 G. (62M, anemia (disorder), on acetaminophen)",
+      "bucket": "male_geriatric_cancer",
+      "age": 62,
+      "sex": "male",
+      "postal_code": "01607",
+      "city": "Worcester",
+      "state": "MA",
+      "active_conditions": [
+        "Anemia (disorder)",
+        "Body mass index 30+ - obesity (finding)",
+        "Chronic low back pain (finding)",
+        "Chronic pain (finding)",
+        "Fibromyalgia (disorder)",
+        "Has a criminal record (finding)",
+        "Major depressive disorder (disorder)",
+        "Non-small cell carcinoma of lung, TNM stage 1 (disorder)"
+      ],
+      "active_medications": [
+        "Acetaminophen 300 MG / Codeine Phosphate 15 MG Oral Tablet"
+      ],
+      "allergies": [],
+      "last_vitals": {
+        "bmi": 27.4,
+        "pulse": 63.0,
+        "respiratory": 14.0,
+        "glucose": 69.3,
+        "temp_c": 37.5
+      },
+      "narrative_seed": "62 year old male presenting today for evaluation. Reports concerns related to anemia (disorder). Active problems include body mass index 30+ - obesity (finding), chronic low back pain (finding), chronic pain (finding), fibromyalgia (disorder). Current medications: acetaminophen. Most recent vitals: HR 63, temp 37.5C."
+    },
+    {
+      "id": "72d6300f-f083-65a0-509d-f6412fa2b529",
+      "label": "Mina319 D. (61F, chronic kidney disease stage 2 (disorder), on fentanyl)",
+      "bucket": "adult_acute",
+      "age": 61,
+      "sex": "female",
+      "postal_code": "01463",
+      "city": "Pepperell",
+      "state": "MA",
+      "active_conditions": [
+        "Chronic kidney disease stage 2 (disorder)",
+        "Chronic kidney disease stage 3 (disorder)",
+        "Chronic low back pain (finding)",
+        "Chronic neck pain (finding)",
+        "Chronic pain (finding)",
+        "Chronic sinusitis (disorder)",
+        "Disorder of kidney due to diabetes mellitus (disorder)",
+        "Essential hypertension (disorder)"
+      ],
+      "active_medications": [
+        "72 HR Fentanyl 0.025 MG/HR Transdermal System",
+        "Acetaminophen 300 MG / Codeine Phosphate 15 MG Oral Tablet",
+        "Acetaminophen 325 MG / Oxycodone Hydrochloride 10 MG Oral Tablet [Percocet]",
+        "FLUoxetine 20 MG Oral Capsule",
+        "Hydrochlorothiazide 25 MG Oral Tablet",
+        "amLODIPine 2.5 MG Oral Tablet",
+        "lisinopril 10 MG Oral Tablet"
+      ],
+      "allergies": [],
+      "last_vitals": {
+        "bmi": 27.8,
+        "pulse": 86.0,
+        "respiratory": 13.0
+      },
+      "narrative_seed": "61 year old female presenting today for evaluation. Reports concerns related to chronic kidney disease stage 2 (disorder). Active problems include chronic kidney disease stage 3 (disorder), chronic low back pain (finding), chronic neck pain (finding), chronic pain (finding). Current medications: fentanyl, acetaminophen, acetaminophen, fluoxetine, hydrochlorothiazide. Most recent vitals: HR 86."
+    },
+    {
+      "id": "cd6bfe89-488d-e907-d732-4f47a719be2c",
+      "label": "Hoa730 Lecia978 P. (39F, body mass index 30+ - obesity (finding))",
+      "bucket": "young_adult_metabolic",
+      "age": 39,
+      "sex": "female",
+      "postal_code": "02186",
+      "city": "Quincy",
+      "state": "MA",
+      "active_conditions": [
+        "Body mass index 30+ - obesity (finding)",
+        "Chronic sinusitis (disorder)",
+        "History of tubal ligation (situation)"
+      ],
+      "active_medications": [],
+      "allergies": [],
+      "last_vitals": {
+        "bmi": 30.3,
+        "pulse": 97.0,
+        "respiratory": 13.0,
+        "temp_c": 37.4
+      },
+      "narrative_seed": "39 year old female presenting today for evaluation. Reports concerns related to body mass index 30+ - obesity (finding). Active problems include chronic sinusitis (disorder), history of tubal ligation (situation). Most recent vitals: HR 97, temp 37.4C."
+    },
+    {
+      "id": "8c458d20-daf8-63cd-2ef7-3a1c5b6e3962",
+      "label": "Carlo647 Marlon619 V. (15M, fracture of bone (disorder), on loratadine)",
+      "bucket": "pediatric_routine",
+      "age": 15,
+      "sex": "male",
+      "postal_code": "02184",
+      "city": "Braintree",
+      "state": "MA",
+      "active_conditions": [
+        "Fracture of bone (disorder)",
+        "Fracture of forearm (disorder)",
+        "Perennial allergic rhinitis with seasonal variation (disorder)"
+      ],
+      "active_medications": [
+        "Loratadine 5 MG Chewable Tablet",
+        "NDA020800 0.3 ML Epinephrine 1 MG/ML Auto-Injector",
+        "Naproxen sodium 220 MG Oral Tablet"
+      ],
+      "allergies": [
+        "Allergic disposition (finding)",
+        "Animal dander (substance)",
+        "Cow's milk (substance)",
+        "Fish (substance)",
+        "House dust mite (organism)",
+        "Latex (substance)"
+      ],
+      "last_vitals": {
+        "temp_c": 37.7,
+        "bmi": 21.4,
+        "pulse": 84.0,
+        "respiratory": 13.0
+      },
+      "narrative_seed": "15 year old male presenting today for evaluation. Reports concerns related to fracture of bone (disorder). Active problems include fracture of forearm (disorder), perennial allergic rhinitis with seasonal variation (disorder). Current medications: loratadine, epinephrine, naproxen. Most recent vitals: HR 84, temp 37.7C."
+    },
+    {
+      "id": "08c6ca9c-1ba6-97b5-0c33-65f7755af0e2",
+      "label": "Niki25 Williemae619 B. (62F, acute non-st segment elevation myocardial infarction (disorder), on hydrocodone)",
+      "bucket": "adult_chronic",
+      "age": 62,
+      "sex": "female",
+      "postal_code": "01983",
+      "city": "Topsfield",
+      "state": "MA",
+      "active_conditions": [
+        "Acute non-ST segment elevation myocardial infarction (disorder)",
+        "Anemia (disorder)",
+        "Body mass index 30+ - obesity (finding)",
+        "Chronic pain (finding)",
+        "Chronic sinusitis (disorder)",
+        "History of myocardial infarction (situation)",
+        "Past pregnancy history of miscarriage (situation)",
+        "Prediabetes (finding)"
+      ],
+      "active_medications": [
+        "12 HR Hydrocodone Bitartrate 10 MG Extended Release Oral Capsule",
+        "Acetaminophen 300 MG / Hydrocodone Bitartrate 5 MG Oral Tablet",
+        "aspirin 81 MG Oral Tablet",
+        "atorvastatin 40 MG Oral Tablet",
+        "carvedilol 6.25 MG Oral Tablet",
+        "lisinopril 20 MG Oral Tablet",
+        "prasugrel 10 MG Oral Tablet"
+      ],
+      "allergies": [],
+      "last_vitals": {
+        "bmi": 30.4,
+        "pulse": 72.0,
+        "respiratory": 15.0,
+        "glucose": 64.3,
+        "temp_c": 39.8,
+        "o2_sat": 84.5
+      },
+      "narrative_seed": "62 year old female presenting today for evaluation. Reports concerns related to acute non-st segment elevation myocardial infarction (disorder). Active problems include anemia (disorder), body mass index 30+ - obesity (finding), chronic pain (finding), chronic sinusitis (disorder). Current medications: hydrocodone, acetaminophen, aspirin, atorvastatin, carvedilol. Most recent vitals: HR 72, SpO2 84%, temp 39.8C."
+    },
+    {
+      "id": "e4882106-55a4-13ed-ab90-360b8f522e51",
+      "label": "Renay451 Johanne551 R. (75F, abnormal findings diagnostic imaging heart+coronary circulat (finding), on donepezil)",
+      "bucket": "geriatric_metabolic",
+      "age": 75,
+      "sex": "female",
+      "postal_code": "02368",
+      "city": "Randolph",
+      "state": "MA",
+      "active_conditions": [
+        "Abnormal findings diagnostic imaging heart+coronary circulat (finding)",
+        "Alzheimer's disease (disorder)",
+        "Body mass index 30+ - obesity (finding)",
+        "Chronic low back pain (finding)",
+        "Chronic neck pain (finding)",
+        "Chronic pain (finding)",
+        "Chronic sinusitis (disorder)",
+        "Essential hypertension (disorder)"
+      ],
+      "active_medications": [
+        "24 HR Donepezil hydrochloride 10 MG / Memantine hydrochloride 28 MG Extended Release Oral Capsule",
+        "24 HR metoprolol succinate 100 MG Extended Release Oral Tablet",
+        "Acetaminophen 325 MG Oral Tablet [Tylenol]",
+        "Clopidogrel 75 MG Oral Tablet",
+        "Hydrochlorothiazide 25 MG Oral Tablet",
+        "Nitroglycerin 0.4 MG/ACTUAT Mucosal Spray",
+        "Simvastatin 20 MG Oral Tablet",
+        "lisinopril 10 MG Oral Tablet"
+      ],
+      "allergies": [],
+      "last_vitals": {
+        "bmi": 27.7,
+        "pulse": 60.0,
+        "respiratory": 15.0,
+        "glucose": 66.6
+      },
+      "narrative_seed": "75 year old female presenting today for evaluation. Reports concerns related to abnormal findings diagnostic imaging heart+coronary circulat (finding). Active problems include alzheimer's disease (disorder), body mass index 30+ - obesity (finding), chronic low back pain (finding), chronic neck pain (finding). Current medications: donepezil, metoprolol, acetaminophen, clopidogrel, hydrochlorothiazide. Most recent vitals: HR 60."
+    }
+  ]
+}
