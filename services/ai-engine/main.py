@@ -222,6 +222,12 @@ def _build_intake_payload(request: IntakeRequest) -> Dict[str, Any]:
         "clinician_brief": base.get("clinician_brief", ""),
         "source_tier": base.get("source_tier", 3),
         "provenance": base.get("provenance", []) or [],
+        # Honest "Powered by..." attribution. Tier 1 carries the actual
+        # LLM provider+model that synthesized the response; Tier 2/3 carry
+        # the literal string "deterministic" so the UI never claims an
+        # LLM ran when only the KB / safe defaults did.
+        "llm_provider": base.get("llm_provider", "deterministic"),
+        "llm_model": base.get("llm_model", "kb_template"),
         # Hackathon Step 2 superset.
         "urgency_label": urgency_label,
         "urgency_reason": (

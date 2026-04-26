@@ -204,6 +204,8 @@ type TriageResult = {
   fhir: Record<string, unknown>;
   sourceTier?: number;
   provenance?: string[];
+  llmProvider?: string;
+  llmModel?: string;
 };
 
 function asArray<T = unknown>(v: unknown): T[] {
@@ -325,6 +327,8 @@ function normalizeResult(raw: unknown, fallbackText: string): TriageResult {
           },
     sourceTier: typeof r.source_tier === "number" ? r.source_tier : undefined,
     provenance: asArray<string>(r.provenance).map(String),
+    llmProvider: typeof r.llm_provider === "string" ? r.llm_provider : undefined,
+    llmModel: typeof r.llm_model === "string" ? r.llm_model : undefined,
   };
 }
 
@@ -1048,6 +1052,21 @@ function ResultBlocks({
             <ConfidencePill confidence={result.confidence} bg={u.dot} fg={u.bg} />
             {result.sourceTier !== undefined && (
               <TierBadge tier={result.sourceTier} bg={u.dot} fg={u.bg} />
+            )}
+            {result.llmProvider && (
+              <span
+                className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                style={{ borderColor: u.dot, color: u.text, background: u.bg }}
+                title={
+                  result.llmProvider === "deterministic"
+                    ? "No live LLM was used; this response came from the local clinical knowledge base or a safe default."
+                    : `Powered by ${result.llmProvider} ${result.llmModel ?? ""}`.trim()
+                }
+              >
+                {result.llmProvider === "deterministic"
+                  ? "KB · deterministic"
+                  : `${result.llmProvider} · ${result.llmModel ?? ""}`}
+              </span>
             )}
           </div>
         </div>

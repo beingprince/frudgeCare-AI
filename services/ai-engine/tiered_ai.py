@@ -4,22 +4,28 @@ FrudgeCare AI — Tiered Cascade.
 Every AI endpoint follows this flow:
 
   Tier 0: Retrieve facts from the local knowledge base (always).
-  Tier 1: Ask Gemini to reason OVER the retrieved facts (preferred path).
-  Tier 2: If Gemini fails, build a response purely from the retrieved facts.
+  Tier 1: Ask an LLM to reason OVER the retrieved facts (preferred path).
+  Tier 2: If the LLM fails, build a response purely from the retrieved facts.
   Tier 3: If retrieval also yields nothing, return a safe, rule-based response.
 
 The tier that produced a response is returned as `source_tier` and the list of
-KB entry IDs that contributed is returned as `provenance`. This lets the UI
-display a "grounded in clinical KB" badge and lets the ops dashboard track
-reliability metrics (e.g., "92% Tier 1, 7% Tier 2, 1% Tier 3 last hour").
+KB entry IDs that contributed is returned as `provenance`. The active LLM is
+also surfaced as `llm_provider` / `llm_model` so the UI's "Powered by..." chip
+labels the engine honestly.
+
+LLM provider order (mirrors agent_react._select_provider):
+  - OPENAI_API_KEY set      -> OpenAI gpt-4o-mini  (preferred — generous
+                                free quota, low latency for short JSON)
+  - GEMINI_API_KEY set      -> Google Gemini 2.5 Flash-Lite (fallback)
+  - neither set / both fail -> Tier 2 templated, then Tier 3 safe default
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
-
-from google.genai import types
+import os
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from retrieval import (
     check_drug_interactions,
@@ -34,16 +40,163 @@ from retrieval import (
 
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
+OPENAI_MODEL = "gpt-4o-mini"
+
+
+# ----------------------------------------------------------------------
+# Provider abstraction — same shape as agent_react.LlmProvider but kept
+# local so this module stays import-clean (agent_react imports tiered_ai
+# transitively in some entry points).
+# ----------------------------------------------------------------------
+
+@dataclass
+class _LlmProvider:
+    name: str           # "openai" / "gemini"
+    model_id: str       # exact model id reported back to the UI
+    call: Callable[[str], Dict[str, Any]]
+
+
+def _make_openai_provider() -> Optional[_LlmProvider]:
+    key = os.getenv("OPENAI_API_KEY")
+    if not key:
+        return None
+    try:
+        from openai import OpenAI
+    except ImportError:
+        print("[tiered_ai] openai SDK not installed; skipping OpenAI provider")
+        return None
+
+    client = OpenAI(api_key=key)
+
+    def _call(prompt: str) -> Dict[str, Any]:
+        rsp = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system",
+                 "content": "You are a clinical decision support AI. "
+                            "Respond ONLY with the JSON object the user "
+                            "prompt asks for — no prose, no markdown."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+        )
+        return json.loads((rsp.choices[0].message.content or "").strip() or "{}")
+
+    return _LlmProvider(name="openai", model_id=OPENAI_MODEL, call=_call)
+
+
+def _make_gemini_provider() -> Optional[_LlmProvider]:
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        return None
+    try:
+        from google import genai
+        from google.genai import types as gtypes
+    except ImportError:
+        print("[tiered_ai] google.genai SDK not installed; skipping Gemini provider")
+        return None
+
+    client = genai.Client(api_key=key)
+
+    def _call(prompt: str) -> Dict[str, Any]:
+        rsp = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=gtypes.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        return json.loads(rsp.text)
+
+    return _LlmProvider(name="gemini", model_id=GEMINI_MODEL, call=_call)
+
+
+# Lazily resolved: main.py imports this module BEFORE calling load_dotenv(),
+# so resolving at import time would consistently miss OPENAI_API_KEY and
+# silently fall through to Gemini. _active_llm() is called inside the
+# request path instead, after the env is loaded. The cached value is
+# captured once on first call so subsequent requests don't re-init the
+# OpenAI client.
+_ACTIVE_LLM: Optional[_LlmProvider] = None
+_ACTIVE_LLM_RESOLVED: bool = False
+
+
+def _active_llm() -> Optional[_LlmProvider]:
+    """Return the preferred LLM provider, resolving once on first use.
+
+    OpenAI first, then Gemini. None if neither key/SDK is available.
+    """
+    global _ACTIVE_LLM, _ACTIVE_LLM_RESOLVED
+    if not _ACTIVE_LLM_RESOLVED:
+        _ACTIVE_LLM = _make_openai_provider() or _make_gemini_provider()
+        _ACTIVE_LLM_RESOLVED = True
+        if _ACTIVE_LLM is not None:
+            print(f"[tiered_ai] active LLM: {_ACTIVE_LLM.name} ({_ACTIVE_LLM.model_id})")
+        else:
+            print("[tiered_ai] no LLM configured — Tier 1 disabled")
+    return _ACTIVE_LLM
+
+
+def llm_status() -> Dict[str, Optional[str]]:
+    """Public probe so other modules / debug routes can report which LLM is active."""
+    p = _active_llm()
+    if p is None:
+        return {"provider": None, "model": None}
+    return {"provider": p.name, "model": p.model_id}
+
+
+def _llm_available(legacy_client: Optional[Any]) -> bool:
+    """Tier-1 gate. Either the auto-selected LLM OR the legacy Gemini
+    client (kept for backward-compat callers) being non-None counts as
+    "an LLM is available".
+    """
+    return _active_llm() is not None or legacy_client is not None
+
+
+def _llm_json(legacy_client: Optional[Any], prompt: str) -> Tuple[Dict[str, Any], _LlmProvider]:
+    """Call the active LLM and return (parsed_json, provider_used).
+
+    Tries the auto-selected provider first. If that errors, falls back
+    to the caller's legacy client (Gemini, kept for compatibility).
+    Raises only when both paths fail — the cascade then drops to Tier 2.
+    """
+    active = _active_llm()
+    if active is not None:
+        try:
+            data = active.call(prompt)
+            return data, active
+        except Exception as e:  # noqa: BLE001
+            # Don't lose the legacy client as a fallback if it was passed.
+            if legacy_client is None:
+                raise
+            print(f"[tiered_ai] {active.name} failed ({e}); trying legacy Gemini client")
+
+    # Legacy code path: caller threaded a Gemini client in directly.
+    if legacy_client is not None:
+        from google.genai import types as gtypes  # local import
+        rsp = legacy_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=gtypes.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        legacy_provider = _LlmProvider(
+            name="gemini",
+            model_id=GEMINI_MODEL,
+            call=lambda _p: {},  # placeholder; we already have the result
+        )
+        return json.loads(rsp.text), legacy_provider
+
+    raise RuntimeError("No LLM provider configured")
 
 
 def _gemini_json(client: Any, prompt: str) -> Dict[str, Any]:
-    """Call Gemini and parse a JSON response. Raises on failure."""
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
-    )
-    return json.loads(response.text)
+    """Backwards-compatible shim. New code should call _llm_json instead.
+
+    Routes through the auto-selected LLM (OpenAI > Gemini) first; only
+    falls back to the legacy direct-Gemini client if that fails. Returns
+    just the parsed JSON to match the original signature.
+    """
+    data, _ = _llm_json(client, prompt)
+    return data
 
 
 # ======================================================================
@@ -68,13 +221,13 @@ def tiered_analyze_intake(
     # Compute retrieval-derived urgency as a safe floor.
     urgency_from_kb = _combined_urgency(matches, red_flags)
 
-    # --- Tier 1: Gemini-as-verifier -------------------------------------
-    if client is not None:
+    # --- Tier 1: LLM-as-verifier (OpenAI primary, Gemini fallback) -----
+    if _llm_available(client):
         prompt = _build_intake_prompt(
             symptoms, duration, severity, patient_history, matches, red_flags
         )
         try:
-            data = _gemini_json(client, prompt)
+            data, used = _llm_json(client, prompt)
             # Sanity-check the LLM; never let it downgrade a red flag.
             if red_flags and data.get("urgency") != "high":
                 data["urgency"] = "high"
@@ -82,7 +235,8 @@ def tiered_analyze_intake(
                     "Red-flag override applied — KB rule required 'high' urgency."
                 )
             data.setdefault("urgency", urgency_from_kb or "medium")
-            return _wrap(data, tier=1, provenance=provenance)
+            return _wrap(data, tier=1, provenance=provenance,
+                         llm_provider=used.name, llm_model=used.model_id)
         except Exception as e:  # noqa: BLE001
             print(f"[Tier 1] analyze-intake LLM failed: {e}. Falling back to Tier 2.")
 
@@ -181,7 +335,7 @@ def tiered_rank_queue(
     # beyond the urgency encoding the intake already derived.
     deterministic = _deterministic_rank(cases)
 
-    if client is not None:
+    if _llm_available(client):
         cases_text = "\n".join(
             f"- Case {c['case_id']}: urgency={c['urgency']}, "
             f"wait={c['wait_minutes']}min, status={c['current_status']}, "
@@ -203,8 +357,9 @@ Return ONLY:
   "bottleneck_alerts": ["..."]
 }}"""
         try:
-            data = _gemini_json(client, prompt)
-            return _wrap(data, tier=1, provenance=["queue_heuristic_v1"])
+            data, used = _llm_json(client, prompt)
+            return _wrap(data, tier=1, provenance=["queue_heuristic_v1"],
+                         llm_provider=used.name, llm_model=used.model_id)
         except Exception as e:  # noqa: BLE001
             print(f"[Tier 1] rank-queue LLM failed: {e}. Falling back to Tier 2.")
 
@@ -278,7 +433,7 @@ def tiered_nurse_assist(
                 )
 
     # --- Tier 1 ----------------------------------------------------------
-    if client is not None:
+    if _llm_available(client):
         prompt = f"""You are a clinical decision support AI assisting a registered nurse.
 
 A local KB has already produced these findings. Incorporate them and do not contradict vitals flags or red flags.
@@ -309,14 +464,15 @@ Respond ONLY with:
   "documentation_hints": ["clinical observations to explicitly document"]
 }}"""
         try:
-            ai = _gemini_json(client, prompt)
+            ai, used = _llm_json(client, prompt)
             return _wrap({
                 "vitals_flags": vitals_flags,
                 "allergy_alerts": _dedupe(allergy_alerts_kb + ai.get("allergy_alerts", [])),
                 "suggested_questions": ai.get("suggested_questions", []),
                 "documentation_hints": ai.get("documentation_hints", []),
                 "drug_interactions": interactions,
-            }, tier=1, provenance=provenance)
+            }, tier=1, provenance=provenance,
+               llm_provider=used.name, llm_model=used.model_id)
         except Exception as e:  # noqa: BLE001
             print(f"[Tier 1] nurse-assist LLM failed: {e}. Falling back to Tier 2.")
 
@@ -417,7 +573,7 @@ def tiered_provider_copilot(
                   "Clinical judgment of the licensed provider supersedes all AI recommendations.")
 
     # --- Tier 1 ---------------------------------------------------------
-    if client is not None:
+    if _llm_available(client):
         prompt = f"""You are a clinical decision support AI assisting a licensed physician.
 You provide suggestions only. The physician makes all final decisions.
 A local KB has retrieved grounding facts. Do not contradict them.
@@ -451,7 +607,7 @@ Respond ONLY with:
   "disclaimer": "{disclaimer}"
 }}"""
         try:
-            data = _gemini_json(client, prompt)
+            data, used = _llm_json(client, prompt)
             # Merge KB interactions in so the LLM can't silently drop them.
             llm_alerts: List[str] = list(data.get("drug_interaction_alerts", []))
             for h in interactions:
@@ -460,7 +616,8 @@ Respond ONLY with:
                     llm_alerts.append(f"{phrase}: {h.get('recommendation','review')}")
             data["drug_interaction_alerts"] = llm_alerts
             data.setdefault("disclaimer", disclaimer)
-            return _wrap(data, tier=1, provenance=provenance)
+            return _wrap(data, tier=1, provenance=provenance,
+                         llm_provider=used.name, llm_model=used.model_id)
         except Exception as e:  # noqa: BLE001
             print(f"[Tier 1] provider-copilot LLM failed: {e}. Falling back to Tier 2.")
 
@@ -581,8 +738,8 @@ def tiered_build_patient_profile(
     if pretriage_urgency:
         provenance.append(f"pretriage:urgency={pretriage_urgency}")
 
-    # --- Tier 1: Gemini ---------------------------------------------------
-    if client is not None:
+    # --- Tier 1: LLM-as-scribe (OpenAI primary, Gemini fallback) -------
+    if _llm_available(client):
         prompt = _build_profile_prompt(
             full_name=safe_name,
             age=age,
@@ -599,7 +756,7 @@ def tiered_build_patient_profile(
             pretriage_clinician_brief=pretriage_clinician_brief,
         )
         try:
-            data = _gemini_json(client, prompt)
+            data, used = _llm_json(client, prompt)
             data.setdefault("display_name", safe_name)
             data.setdefault("age", age)
             data.setdefault("chief_complaint_short", chief[:80])
@@ -611,7 +768,8 @@ def tiered_build_patient_profile(
                 "red_flags_for_team",
             ):
                 data.setdefault(list_field, [])
-            return _wrap(data, tier=1, provenance=provenance)
+            return _wrap(data, tier=1, provenance=provenance,
+                         llm_provider=used.name, llm_model=used.model_id)
         except Exception as e:  # noqa: BLE001
             print(f"[Tier 1] build-patient-profile LLM failed: {e}. Falling back to Tier 2.")
 
@@ -780,10 +938,25 @@ def _templated_profile(
 # Shared utilities
 # ======================================================================
 
-def _wrap(payload: Dict[str, Any], tier: int, provenance: List[str]) -> Dict[str, Any]:
+def _wrap(
+    payload: Dict[str, Any],
+    tier: int,
+    provenance: List[str],
+    llm_provider: Optional[str] = None,
+    llm_model: Optional[str] = None,
+) -> Dict[str, Any]:
     payload = dict(payload)  # don't mutate caller's dict
     payload["source_tier"] = tier
     payload["provenance"] = provenance
+    # Always tell the UI which engine produced this — Tier 2/3 are
+    # explicitly labeled "deterministic" so the "Powered by..." chip
+    # never lies. Tier 1 carries the actual provider+model.
+    if tier == 1 and llm_provider:
+        payload["llm_provider"] = llm_provider
+        payload["llm_model"] = llm_model
+    else:
+        payload["llm_provider"] = "deterministic"
+        payload["llm_model"] = "kb_template" if tier == 2 else "safe_default"
     return payload
 
 

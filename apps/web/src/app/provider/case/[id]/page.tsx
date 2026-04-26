@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CaseHeader } from "@/components/shared/CaseHeader";
 import { type TimelineEvent } from "@/components/shared/CaseTimeline";
@@ -29,7 +29,8 @@ import {
 import { DecisionReceipt } from "./_components/DecisionReceipt";
 import { AICoPilotPanel } from "./_components/AICoPilotPanel";
 import {
-  getProviderCaseView,
+  loadProviderCaseView,
+  type ProviderCaseView,
   type TimelineCategory,
 } from "./_data/case-view";
 import {
@@ -58,7 +59,13 @@ export default function ProviderCaseReview() {
   const router = useRouter();
   const caseId = params?.id ?? "";
 
-  const view = useMemo(() => getProviderCaseView(caseId), [caseId]);
+  // Real-data loader: hits /api/cases/[caseId] (Supabase) and folds the
+  // nurse handoff brief stored in cases.ai_patient_profile.nurse_assessment
+  // into the same view shape the rest of the page consumes. This is what
+  // makes the front-desk → nurse → provider chain actually carry data
+  // across page boundaries.
+  const [view, setView] = useState<ProviderCaseView | null>(null);
+  const [loadingView, setLoadingView] = useState(true);
 
   // Form submission data — starts by checking whether a decision already
   // exists for this case in local storage (so refreshing after submit
@@ -67,15 +74,42 @@ export default function ProviderCaseReview() {
   const [submitting, setSubmitting] = useState(false);
   const [escalationSent, setEscalationSent] = useState(false);
 
+  useEffect(() => {
+    if (!caseId) return;
+    let cancelled = false;
+    setLoadingView(true);
+    loadProviderCaseView(caseId)
+      .then((v) => {
+        if (!cancelled) {
+          setView(v);
+          setLoadingView(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoadingView(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId]);
+
   // load any saved decision on the client after mount. This reads from
   // localStorage, which is a browser-only API, so the effect is the correct
   // place — not the show on screen body (server-side loading would mismatch) and not useSyncExternalStore
   // (overkill for a one-shot read in mock mode).
+  //
+  // We try both the URL caseId (which may be a case_code like FC-C-ABC123)
+  // and the loaded view.id (always the UUID) so a refresh by either key
+  // surfaces the previously-signed receipt.
   useEffect(() => {
     if (!caseId) return;
-    // eslint-disable-next-line react-hooks/set-data-in-effect
-    setDecision(getDecision(caseId));
-  }, [caseId]);
+    const fromUrl = getDecision(caseId);
+    if (fromUrl) {
+      setDecision(fromUrl);
+      return;
+    }
+    if (view?.id) setDecision(getDecision(view.id));
+  }, [caseId, view?.id]);
 
   // Auto-hide the escalation-sent banner on the not-cleared gate.
   useEffect(() => {
@@ -145,6 +179,23 @@ export default function ProviderCaseReview() {
 
     doc.save(`case-${view.caseMeta.caseCode}-${new Date().toISOString().split('T')[0]}.pdf`);
   };
+
+  // ─── Loading state ─────────────────────────────────────────────────────
+  if (loadingView) {
+    return (
+      <div className="flex flex-col h-full bg-slate-50">
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="fc-card p-6 md:p-8 max-w-md w-full text-center">
+            <div className="w-10 h-10 mx-auto rounded-full bg-slate-100 border border-slate-200 animate-pulse mb-3" />
+            <h1 className="text-[15px] font-semibold text-slate-700">Loading case…</h1>
+            <p className="mt-1 text-[12px] text-slate-500">
+              Fetching <span className="font-mono">{caseId}</span> from the case service.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ─── Not-found data ────────────────────────────────────────────────────
   if (!view) {
@@ -329,10 +380,22 @@ export default function ProviderCaseReview() {
   }
 
   // ─── Submit handler ─────────────────────────────────────────────────────
+  // Persists the decision (Supabase via /api/provider/decisions, mirrored
+  // to localStorage as a backup) and then advances the case state machine
+  // forward so /front-desk/queue, /patient/status, and /operations/audit
+  // all reflect the new disposition. close_and_discharge skips straight
+  // to disposition_finalized; everything else issues an action that ops
+  // can follow up on.
   async function handleSubmit(payload: DecisionFormSubmit) {
+    if (!view) return;
     setSubmitting(true);
     const signed: ProviderDecision = {
-      caseId,
+      // Always use the canonical case UUID so /api/provider/decisions can
+      // write into a uuid-typed FK without a 22P02 cast error. The local
+      // receipt mirror still keys on this same id, so refreshing the URL
+      // (case_code) still shows the receipt because the page also loads
+      // by code → UUID.
+      caseId: view.id,
       providerId: CURRENT_PROVIDER.id,
       providerName: CURRENT_PROVIDER.name,
       nextAction: payload.nextAction,
@@ -342,6 +405,40 @@ export default function ProviderCaseReview() {
     };
     try {
       await saveDecision(signed);
+
+      // Advance the case state machine. Best-effort: a transition
+      // failure (already-advanced, missing FK, etc.) shouldn't lose the
+      // signed receipt that the provider just authored.
+      try {
+        await fetch("/api/cases/transition", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            case_id: view.id,
+            from_status: "provider_review_pending",
+            to_status: "provider_action_issued",
+            actor_id: CURRENT_PROVIDER.id,
+            event_type: "provider.decision_signed",
+            metadata: { action: payload.nextAction },
+          }),
+        });
+        if (payload.nextAction === "close_and_discharge") {
+          await fetch("/api/cases/transition", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              case_id: view.id,
+              from_status: "provider_action_issued",
+              to_status: "disposition_finalized",
+              actor_id: CURRENT_PROVIDER.id,
+              event_type: "provider.case_closed",
+            }),
+          });
+        }
+      } catch (e) {
+        console.warn("[provider/case] transition failed (decision still saved):", e);
+      }
+
       setDecision(signed);
     } finally {
       setSubmitting(false);
@@ -350,6 +447,7 @@ export default function ProviderCaseReview() {
 
   function handleEdit() {
     clearDecision(caseId);
+    if (view?.id) clearDecision(view.id);
     setDecision(null);
   }
 
