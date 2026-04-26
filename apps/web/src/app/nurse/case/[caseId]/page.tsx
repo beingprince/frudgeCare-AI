@@ -451,6 +451,42 @@ export default function NurseCaseWorkspace() {
     const fromForEscalate =
       caseDetail.status === "nurse_validated" ? "nurse_validated" : "nurse_triage_in_progress";
     try {
+      // Persist a minimal handoff so /provider/case still receives vitals + narrative
+      // (escalation used to transition without saving nurse_assessment).
+      const summaryEsc =
+        formData.nurseSummary?.trim() ||
+        "Escalated by triage nurse for immediate provider review (urgency upgraded).";
+      const escAssessment = await fetch("/api/nurse/assessments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          case_id: caseDetail.id,
+          nurse_id: NURSE_ID,
+          status: "escalated",
+          primary_complaint: formData.onset || caseDetail.symptom_text || "See intake",
+          severity: `ESI ${formData.esiLevel} (escalated)`,
+          pain_score: formData.painScore,
+          associated_symptoms: formData.associated
+            ? formData.associated.split(",").map((s) => s.trim())
+            : [],
+          denied_symptoms: formData.denied
+            ? formData.denied.split(",").map((s) => s.trim())
+            : [],
+          red_flags_checked: Array.from(formData.redFlagsChecked),
+          additional_structured_data: {
+            vitals,
+            notTakenReason: vitals.notTakenReason,
+          },
+          nurse_clinical_summary: summaryEsc,
+          provider_handoff_brief: summaryEsc,
+          is_validated: true,
+          validated_by_user_id: NURSE_ID,
+          validated_at: new Date().toISOString(),
+          assessment_completed_at: new Date().toISOString(),
+        }),
+      });
+      if (!escAssessment.ok) throw new Error("Could not save escalation handoff.");
+
       await fetch("/api/cases/transition", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

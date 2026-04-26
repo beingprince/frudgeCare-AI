@@ -1,18 +1,10 @@
 "use client";
 
 /**
- * Landing — hackathon MVP entry.
+ * Landing — FrudgeCare demo entry (patient-facing theme per UX foundations:
+ * primary #0F4C81, calm copy, no favicon, no “AI stack” jargon on the public hero).
  *
- * Two equal-weight CTAs:
- *   1. Patient Triage Demo  → /triage  (the AI hero — single screen, no login)
- *   2. Staff Console        → /console (unified panel shell — Front Desk · Nurse ·
- *                                       Provider · Operations in one tabbed surface)
- *
- * Tertiary chip row reminds the operator that the global Cmd+K AI Concierge
- * is reachable from anywhere, including this page.
- *
- * No auth. No persona switcher. No hidden routes. Anything else worth
- * showing is exactly one click away from one of these two screens.
+ * Staff workflows live under /console; this page stays human and readable.
  */
 
 import React, { useEffect, useState } from "react";
@@ -20,54 +12,47 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import {
   ArrowUpRight,
-  Activity,
   LayoutDashboard,
-  Sparkles,
-  Brain,
-  Layers,
-  Database,
-  ShieldCheck,
+  HeartPulse,
+  ClipboardList,
+  Users,
   Stethoscope,
 } from "lucide-react";
 
 const ENTRY_POINTS = [
   {
-    title: "Patient Triage Demo",
-    eyebrow: "AI hero",
+    title: "Start your visit (demo)",
+    eyebrow: "Patients & guests",
     href: "/triage",
-    icon: Activity,
+    icon: HeartPulse,
     description:
-      "One screen, one symptom narrative, four AI layers. Watch NLP extraction, RAG-grounded guidelines, Gemini reasoning and the full downstream cascade fan out in real time.",
-    bullets: ["NLP entity extraction", "RAG clinical guidelines", "Gemini reasoning", "FHIR CarePlan output"],
-    accent: "#1565C0",
+      "Describe what you are feeling in plain language. Your answers are organized into a clear summary the front desk and nurse can use—before you see a clinician.",
+    bullets: ["No account required", "Mobile-friendly", "You stay in control of what is shared"],
   },
   {
-    title: "Agentic Triage",
-    eyebrow: "Tool-calling agent",
+    title: "Clinical decision support (demo)",
+    eyebrow: "Transparent assist",
     href: "/agent",
-    icon: Sparkles,
+    icon: ClipboardList,
     description:
-      "An autonomous agent that runs six clinical tools against the local knowledge base, then asks Gemini to synthesise the final urgency call. Renders the full reasoning trace as a step-by-step timeline.",
-    bullets: ["Red-flag rules", "Vitals scoring", "Drug interactions", "ICD-10 coding"],
-    accent: "#0D47A1",
+      "See how guided checks (vitals ranges, interaction hints, and clinical references) are combined into a single recommendation you can read step by step.",
+    bullets: ["Shows each check", "Uses the same knowledge base as triage", "Designed for review, not autopilot"],
   },
   {
-    title: "Staff Console",
-    eyebrow: "Unified shell",
+    title: "Staff workspace",
+    eyebrow: "Care team",
     href: "/console",
     icon: LayoutDashboard,
     description:
-      "Front Desk queue, Nurse triage, Provider daily list and Operations KPIs collapsed into one tabbed surface. No sign-in, no role switcher — every panel is one click away.",
-    bullets: ["Queue prioritization", "Vital sign validation", "Daily encounters", "Funnel analytics"],
-    accent: "#1A237E",
+      "Front desk queue, nurse triage, provider review, and operations in one place—aligned with the staff console spec (dense, task-first layout).",
+    bullets: ["Queue & handoffs", "Nurse validation", "Provider decisions"],
   },
 ];
 
-const AI_LAYERS = [
-  { icon: Brain, label: "LLM (Gemini 2.5 Flash-Lite)" },
-  { icon: Database, label: "RAG over clinical guidelines" },
-  { icon: Layers, label: "NLP regex entity extraction" },
-  { icon: ShieldCheck, label: "Tier 0→3 safe fallback" },
+const STEPS = [
+  { title: "Tell us what is wrong", body: "Your story is captured once and carried forward—no retyping at the window." },
+  { title: "The right person reviews", body: "Front desk, triage nurse, and provider each see what they need—when it is their turn." },
+  { title: "Clear next steps", body: "You get a simple status view; the team gets structured notes for safe follow-up." },
 ];
 
 export default function Home() {
@@ -85,94 +70,88 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-slate-50 to-slate-100 flex flex-col">
-      {/* Top brand strip */}
-      <div className="px-6 lg:px-12 py-5 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-[#1565C0] flex items-center justify-center text-white font-black text-lg shadow-sm">
+    <div className="min-h-screen flex flex-col bg-[var(--background)] text-[var(--foreground)]">
+      {/* Top brand strip — patient scope: CSS var primary */}
+      <div className="px-5 md:px-8 lg:px-12 py-5 flex items-center justify-between border-b border-[#E2E8F0] bg-white/90">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-10 h-10 rounded-[var(--radius-card)] flex items-center justify-center text-white font-bold text-lg shadow-resting"
+            style={{ backgroundColor: "var(--primary)" }}
+          >
             F
           </div>
           <div className="leading-tight">
-            <div className="text-[15px] font-bold text-slate-900 tracking-tight">
-              FrudgeCare
-            </div>
-            <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[#1565C0]">
-              AI Healthcare Platform
+            <div className="fc-page-title text-[20px] md:text-[22px]">FrudgeCare</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+              Coordinated intake &amp; handoff (demo)
             </div>
           </div>
         </div>
         <button
           type="button"
           onClick={openPalette}
-          className="hidden sm:inline-flex items-center gap-2 h-9 pl-3 pr-2 rounded-lg border border-slate-200 bg-white hover:border-[#1565C0] hover:bg-[#1565C0]/5 transition-colors text-[13px] text-slate-500"
+          className="hidden sm:inline-flex items-center gap-2 h-9 pl-3 pr-2 rounded-[var(--radius-control)] border border-[#E2E8F0] bg-white hover:border-[var(--primary)] hover:bg-slate-50 transition-colors text-[13px] text-slate-600 fc-focus-ring"
         >
-          <Sparkles className="w-3.5 h-3.5 text-[#1565C0]" />
-          <span>Ask AI</span>
-          <kbd className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50 text-[10.5px] font-mono font-semibold text-slate-500">
+          <span>Shortcuts</span>
+          <kbd className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-[10.5px] font-mono font-semibold text-slate-500">
             {isMac ? "⌘" : "Ctrl"}+K
           </kbd>
         </button>
       </div>
 
-      {/* Hero */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 lg:px-12 py-10">
-        <div className="max-w-5xl w-full space-y-12">
+      <div className="flex-1 flex flex-col items-center justify-center px-5 md:px-8 lg:px-12 py-10 md:py-14">
+        <div className="max-w-5xl w-full space-y-10 md:space-y-12">
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="text-center space-y-5"
+            transition={{ duration: 0.35 }}
+            className="text-center space-y-4"
           >
-            <span className="inline-flex items-center gap-2 px-3 h-7 rounded-full border border-emerald-200 bg-emerald-50 text-[11px] font-semibold text-emerald-700 uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              CareDevi AI Hackathon 2026 · MVP submission
+            <span className="inline-flex items-center gap-2 px-3 h-7 rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
+              CareDevi Healthcare Innovation Hackathon · April 2026
             </span>
 
-            <h1 className="text-[40px] lg:text-[56px] font-bold text-slate-900 tracking-tight leading-[1.05]">
-              From symptom narrative to care plan in{" "}
-              <span className="text-[#1565C0]">under three seconds</span>.
+            <h1 className="text-[32px] md:text-[44px] font-bold text-slate-900 tracking-tight leading-[1.12]">
+              Care that starts with{" "}
+              <span style={{ color: "var(--primary)" }}>listening</span>, not paperwork.
             </h1>
 
-            <p className="text-[16px] text-slate-600 max-w-3xl mx-auto leading-relaxed">
-              FrudgeCare collapses the entire triage workflow into one AI cascade —
-              NLP extraction, RAG-grounded clinical guidelines, Gemini reasoning,
-              and a downstream queue / nurse / provider fan-out — exposed through
-              two screens and one global command bar. No login required.
+            <p className="text-[15px] md:text-[16px] text-slate-600 max-w-2xl mx-auto leading-relaxed">
+              FrudgeCare is a demo of a single, connected path from your first description of symptoms
+              to the moment a provider is ready to see you—with nursing and front desk handoffs
+              in between, so nothing gets lost.
             </p>
           </motion.div>
 
-          {/* Three big CTAs */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
             {ENTRY_POINTS.map((p, i) => {
               const Icon = p.icon;
               return (
                 <motion.div
                   key={p.href}
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.08 + i * 0.08, duration: 0.4 }}
+                  transition={{ delay: 0.06 + i * 0.06, duration: 0.35 }}
                 >
                   <Link
                     href={p.href}
-                    className="group block h-full bg-white rounded-2xl border border-slate-200 hover:border-[#1565C0] hover:shadow-xl transition-all p-7 no-underline"
+                    className="group block h-full fc-card fc-card-interactive p-6 md:p-7 no-underline"
                   >
-                    <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center justify-between mb-4">
                       <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-sm"
-                        style={{ backgroundColor: p.accent }}
+                        className="w-12 h-12 rounded-[var(--radius-card)] flex items-center justify-center text-white shadow-resting"
+                        style={{ backgroundColor: "var(--primary)" }}
                       >
                         <Icon size={22} strokeWidth={1.75} />
                       </div>
                       <ArrowUpRight
                         size={20}
-                        className="text-slate-300 group-hover:text-[#1565C0] group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all"
+                        className="text-slate-300 group-hover:text-[var(--primary)] group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all"
                       />
                     </div>
 
-                    <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#1565C0] mb-1">
-                      {p.eyebrow}
-                    </div>
-                    <h2 className="text-[22px] font-bold text-slate-900 mb-2.5 tracking-tight">
+                    <div className="fc-eyebrow mb-1 text-[var(--primary)]">{p.eyebrow}</div>
+                    <h2 className="text-[19px] font-bold text-slate-900 mb-2 tracking-tight">
                       {p.title}
                     </h2>
                     <p className="text-[13.5px] text-slate-600 leading-relaxed mb-4">
@@ -183,7 +162,7 @@ export default function Home() {
                       {p.bullets.map((b) => (
                         <span
                           key={b}
-                          className="inline-flex items-center px-2 h-6 rounded-md border border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-600"
+                          className="inline-flex items-center px-2.5 h-6 rounded-[6px] border border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-600"
                         >
                           {b}
                         </span>
@@ -195,52 +174,46 @@ export default function Home() {
             })}
           </div>
 
-          {/* AI layer chips */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.4 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3"
+            transition={{ delay: 0.25, duration: 0.35 }}
+            className="fc-card p-6 md:p-8 max-w-3xl mx-auto"
           >
-            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-              AI Stack
-            </span>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {AI_LAYERS.map((l) => {
-                const Icon = l.icon;
-                return (
-                  <span
-                    key={l.label}
-                    className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full border border-slate-200 bg-white text-[11.5px] font-medium text-slate-600"
-                  >
-                    <Icon className="w-3.5 h-3.5 text-[#1565C0]" />
-                    {l.label}
-                  </span>
-                );
-              })}
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-5 h-5 text-[var(--primary)]" aria-hidden />
+              <h3 className="fc-section-title text-[15px]">How the demo is meant to feel</h3>
             </div>
+            <ol className="space-y-4">
+              {STEPS.map((s, idx) => (
+                <li key={s.title} className="flex gap-4">
+                  <span
+                    className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold text-white"
+                    style={{ backgroundColor: "var(--primary)" }}
+                  >
+                    {idx + 1}
+                  </span>
+                  <div>
+                    <div className="text-[14px] font-semibold text-slate-900">{s.title}</div>
+                    <p className="text-[13px] text-slate-600 mt-0.5 leading-relaxed">{s.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </motion.div>
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="px-6 lg:px-12 py-6 border-t border-slate-200 bg-white/60 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-[11.5px] text-slate-500">
+      <footer className="px-5 md:px-8 lg:px-12 py-6 border-t border-[#E2E8F0] bg-white/80">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-[12px] text-slate-500">
           <div className="flex items-center gap-2">
-            <Stethoscope className="w-3.5 h-3.5 text-[#1565C0]" />
-            <span>
-              Built for the CareDevi AI Healthcare Innovation Hackathon · April
-              2026
-            </span>
+            <Stethoscope className="w-4 h-4 text-[var(--primary)]" aria-hidden />
+            <span>FrudgeCare demo · McNeeseCodes_ · Not for real clinical use.</span>
           </div>
-          <div className="flex items-center gap-3 font-mono text-[10.5px] text-slate-400">
-            <span>Next.js 16</span>
-            <span>·</span>
-            <span>FastAPI</span>
-            <span>·</span>
-            <span>Gemini 2.5</span>
-            <span>·</span>
-            <span>Tailwind</span>
+          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+            <span>Built with care-first UI tokens</span>
+            <span aria-hidden>·</span>
+            <span>Staff views use the clinical console theme</span>
           </div>
         </div>
       </footer>

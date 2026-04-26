@@ -80,6 +80,16 @@ const CustomTooltip = ({
   );
 };
 
+interface FunnelRow {
+  name: string;
+  count: number;
+}
+interface BottleneckRow {
+  stage: string;
+  count: number;
+  trend: string;
+}
+
 interface OpsKPIs {
   activeCases: number;
   avgTriageMinutes: number;
@@ -87,6 +97,9 @@ interface OpsKPIs {
   escalationRate: number;
   aiAccuracyRate: number;
   casesToday: number;
+  funnel?: FunnelRow[] | null;
+  bottlenecks?: BottleneckRow[] | null;
+  dataSource?: string;
 }
 
 interface AIReliability {
@@ -120,6 +133,9 @@ export default function AdminDashboard() {
   const [kpis, setKpis] = useState<OpsKPIs>(FALLBACK_KPIS);
   const [reliability, setReliability] = useState<AIReliability>(FALLBACK_RELIABILITY);
 
+  const funnelChartData = kpis.funnel?.length ? kpis.funnel : FUNNEL_DATA;
+  const bottleneckData = kpis.bottlenecks?.length ? kpis.bottlenecks : BOTTLENECKS;
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -149,10 +165,17 @@ export default function AdminDashboard() {
     <div className="flex flex-col h-full bg-slate-50 overflow-y-auto">
       <PageHeader
         title="Operations dashboard"
-        subtitle="Clinic throughput, response times, and model-assist reliability."
+        subtitle="Clinic throughput and decision-support mix (see staff UX spec: operational, cool palette)."
         actions={
-          <span className="hidden sm:inline-flex items-center px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-[8px] text-[12px] font-medium">
-            Last 24 hours
+          <span className="hidden sm:inline-flex items-center gap-2">
+            {kpis.dataSource === "supabase" && (
+              <span className="px-2 py-1 rounded-[6px] text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-800 border border-emerald-200">
+                Live case counts
+              </span>
+            )}
+            <span className="hidden sm:inline-flex items-center px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-[8px] text-[12px] font-medium">
+              Last 24 hours
+            </span>
           </span>
         }
       />
@@ -266,11 +289,11 @@ export default function AdminDashboard() {
         <div className="md:col-span-6 fc-card p-5 flex flex-col min-h-[300px] md:h-[320px]">
           <SectionHeader
             title="Patient throughput funnel"
-            info="Counts by workflow stage over the last 24 hours. Drop-offs between stages indicate handoff lag."
+            info="Open case counts by workflow stage (from Supabase when configured; otherwise the static demo set)."
           />
           <div className="flex-1 min-h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={FUNNEL_DATA} layout="vertical" margin={{ left: 20, right: 20 }}>
+              <BarChart data={funnelChartData} layout="vertical" margin={{ left: 20, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
                 <XAxis type="number" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
                 <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#334155', fontWeight: 500 }} width={120} axisLine={false} tickLine={false} />
@@ -288,7 +311,7 @@ export default function AdminDashboard() {
             info="Stages where cases are waiting longest. Trend is day-over-day."
           />
           <div className="flex flex-col gap-2">
-            {BOTTLENECKS.map((b, i) => (
+            {bottleneckData.map((b, i) => (
               <div
                 key={i}
                 className="flex items-center justify-between p-3 border border-slate-200 rounded-[10px] hover:bg-slate-50 transition-colors"
@@ -301,10 +324,14 @@ export default function AdminDashboard() {
                 </div>
                 <div
                   className={`text-[12px] font-semibold ${
-                    b.trend.startsWith('+') ? 'text-[#C62828]' : 'text-emerald-600'
+                    b.trend.startsWith("+")
+                      ? "text-[#C62828]"
+                      : b.trend === "live"
+                        ? "text-slate-500"
+                        : "text-emerald-600"
                   }`}
                 >
-                  {b.trend} today
+                  {b.trend === "live" ? "live" : b.trend === "—" ? "—" : `${b.trend} today`}
                 </div>
               </div>
             ))}

@@ -401,6 +401,8 @@ type NurseAssessmentRecord = {
       hr?: string | number;
       tempF?: string | number;
       spo2?: string | number;
+      /** Nurse UI stores RR as `rr` — must mirror here or provider panel stays empty. */
+      rr?: string | number;
       respRate?: string | number;
       notTakenReason?: string;
     };
@@ -429,8 +431,12 @@ function mapStatusToCurrentState(
 }
 
 function buildVitalsFromAssessment(na: NurseAssessmentRecord | null): Vital[] {
-  const v = na?.additional_structured_data?.vitals;
-  if (!v) return [];
+  const raw = na?.additional_structured_data;
+  const v = raw?.vitals;
+  const notTaken =
+    (raw as { notTakenReason?: string } | undefined)?.notTakenReason ||
+    (v as { notTakenReason?: string } | undefined)?.notTakenReason;
+  if (!v && !notTaken) return [];
   const vitals: Vital[] = [];
   const at = na?.validated_at
     ? new Date(na.validated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -473,10 +479,24 @@ function buildVitalsFromAssessment(na: NurseAssessmentRecord | null): Vital[] {
       takenAt: at,
     });
   }
-  if (v.respRate) {
-    const r = Number(v.respRate);
+  if (notTaken && !v?.bpSys && !v?.hr) {
     vitals.push({
-      id: "resp", label: "Respiratory rate", value: String(v.respRate), unit: "/ min",
+      id: "vitals-nt",
+      label: "Vitals",
+      value: "Not obtained",
+      unit: notTaken,
+      abnormal: false,
+      takenAt: at,
+    });
+  }
+
+  if (!v) return vitals;
+
+  const respVal = v.respRate ?? v.rr;
+  if (respVal) {
+    const r = Number(respVal);
+    vitals.push({
+      id: "resp", label: "Respiratory rate", value: String(respVal), unit: "/ min",
       abnormal: Number.isFinite(r) && (r > 22 || r < 10),
       takenAt: at,
     });
@@ -517,7 +537,12 @@ function buildViewFromApiCase(row: ApiCaseRow): ProviderCaseView {
       : null;
 
   const status = row.status ?? "intake_submitted";
-  const isTriageCleared = PROVIDER_VISIBLE_STATUSES.has(status);
+  // Provider workspace should unlock as soon as the triage nurse has
+  // validated a handoff (data lives in `nurse_assessment` even if a
+  // state transition hiccup left the FSM in a nurse-* status for a
+  // moment, or a demo reopens the case).
+  const isTriageCleared =
+    PROVIDER_VISIBLE_STATUSES.has(status) || nurse?.is_validated === true;
   const urgency = mapUrgency(row.urgency_final ?? row.urgency_suggested);
   const age = ageFromRow(row);
   const sex = (row.patient_gender ?? "").trim();
@@ -589,7 +614,7 @@ function buildViewFromApiCase(row: ApiCaseRow): ProviderCaseView {
   const handoffChecklist: HandoffItem[] = [
     { id: "identity",      label: "Patient identity verified",            done: true },
     { id: "complaint",     label: "Chief complaint + ESI captured",       done: !!nurse?.primary_complaint },
-    { id: "vitals",        label: "Vitals captured or marked not-taken",  done: (buildVitalsFromAssessment(nurse).length > 0) || !!nurse?.additional_structured_data?.notTakenReason },
+    { id: "vitals",        label: "Vitals captured or marked not-taken",  done: (buildVitalsFromAssessment(nurse).length > 0) || !!((nurse?.additional_structured_data as { notTakenReason?: string } | undefined)?.notTakenReason) },
     { id: "questionnaire", label: "Symptom questionnaire complete",       done: associated.length + denied.length > 0 },
     { id: "findings",      label: "Findings authored or no-abnormal toggle", done: !!nurseSummary && nurseSummary !== "Awaiting nurse validation." },
     { id: "flags",         label: "Risk flags acknowledged",              done: redFlags.length > 0 || isTriageCleared },

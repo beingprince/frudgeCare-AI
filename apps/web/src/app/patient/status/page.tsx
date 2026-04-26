@@ -438,6 +438,79 @@ function PatientStatusInner() {
     }
   };
 
+  const [exportingSummary, setExportingSummary] = useState(false);
+  const [deletionBusy, setDeletionBusy] = useState(false);
+
+  const handleExportVisitSummaryPdf = async () => {
+    if (!caseData || exportingSummary) return;
+    setExportingSummary(true);
+    try {
+      const { downloadTextPdf } = await import("@/lib/clientPdf");
+      const p = caseData.ai_patient_profile as Record<string, unknown> | null | undefined;
+      const note =
+        (typeof p?.nurse_assessment === "object" &&
+          p?.nurse_assessment &&
+          (p.nurse_assessment as { provider_handoff_brief?: string }).provider_handoff_brief) ||
+        (caseData.structured_summary as string | undefined) ||
+        (caseData.ai_clinician_brief as string | undefined) ||
+        "—";
+      const lines = [
+        "FrudgeCare — visit & tracking summary (demo)",
+        `Case: ${caseData.case_code ?? caseData.id}`,
+        `Status: ${String(caseData.status)}`,
+        `Last updated: ${caseData.updated_at ?? caseData.created_at ?? "—"}`,
+        "",
+        "What you told us",
+        caseData.symptom_text || "—",
+        "",
+        "Team handoff / triage note",
+        String(note),
+      ];
+      await downloadTextPdf(
+        `frudgecare-visit-${caseData.case_code ?? caseData.id}.pdf`,
+        "Visit summary (demo)",
+        lines,
+      );
+      toast.success("PDF ready", "Saved to your downloads folder.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Export failed", "Please try again.");
+    } finally {
+      setExportingSummary(false);
+    }
+  };
+
+  const handleRequestDataDeletion = async () => {
+    if (!caseData || deletionBusy) return;
+    if (
+      !window.confirm(
+        "Request removal of this case from the demo? An administrator can approve it under Admin → Data removal.",
+      )
+    ) {
+      return;
+    }
+    setDeletionBusy(true);
+    try {
+      const res = await fetch("/api/data-deletion/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          case_id: caseData.id,
+          reason: "Requested from patient status (demo)",
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? "Request failed");
+      }
+      toast.success("Request sent", "An admin can review it in Account Administration.");
+    } catch (e) {
+      toast.error("Could not send request", e instanceof Error ? e.message : "Try again later.");
+    } finally {
+      setDeletionBusy(false);
+    }
+  };
+
   if (isWrongStaffView && session) {
     const home = ROLE_HOME[session.role as UserRole] ?? "/";
     return (
@@ -659,6 +732,10 @@ function PatientStatusInner() {
                 isLoading={isLoading}
                 onDownloadReceipt={handleDownloadReceipt}
                 isDownloading={isDownloading}
+                onExportVisitSummary={handleExportVisitSummaryPdf}
+                isExportingSummary={exportingSummary}
+                onRequestDataDeletion={handleRequestDataDeletion}
+                deletionBusy={deletionBusy}
               />
 
               {/* AI-built profile narrative */}
@@ -850,11 +927,19 @@ function SubmittedDetailsSection({
   isLoading,
   onDownloadReceipt,
   isDownloading,
+  onExportVisitSummary,
+  isExportingSummary,
+  onRequestDataDeletion,
+  deletionBusy,
 }: {
   caseData: Case | null;
   isLoading: boolean;
   onDownloadReceipt: () => void;
   isDownloading: boolean;
+  onExportVisitSummary: () => void;
+  isExportingSummary: boolean;
+  onRequestDataDeletion: () => void;
+  deletionBusy: boolean;
 }) {
   return (
     <section className="order-2 w-full border-b border-slate-200/60 bg-white/40 px-4 py-4 sm:px-6 sm:py-5">
@@ -868,29 +953,64 @@ function SubmittedDetailsSection({
           </p>
         </div>
         {caseData && (
-          <button
-            type="button"
-            onClick={onDownloadReceipt}
-            disabled={isDownloading}
-            className={cn(
-              "fc-focus-ring inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-[#0F4C81]/20 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-[#0F4C81] shadow-sm transition",
-              "hover:bg-[#0F4C81] hover:text-white hover:border-[#0F4C81]",
-              "disabled:cursor-not-allowed disabled:opacity-60",
-            )}
-            title="Download a PDF receipt of your intake form"
-          >
-            {isDownloading ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Preparing PDF…
-              </>
-            ) : (
-              <>
-                <Download className="h-3.5 w-3.5" strokeWidth={2.2} />
-                Download intake receipt
-              </>
-            )}
-          </button>
+          <div className="flex flex-col gap-2 sm:items-end">
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={onDownloadReceipt}
+                disabled={isDownloading}
+                className={cn(
+                  "fc-focus-ring inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-[#0F4C81]/20 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-[#0F4C81] shadow-sm transition",
+                  "hover:bg-[#0F4C81] hover:text-white hover:border-[#0F4C81]",
+                  "disabled:cursor-not-allowed disabled:opacity-60",
+                )}
+                title="Download a PDF of your intake form"
+              >
+                {isDownloading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Preparing PDF…
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-3.5 w-3.5" strokeWidth={2.2} />
+                    Intake receipt (PDF)
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={onExportVisitSummary}
+                disabled={isExportingSummary}
+                className={cn(
+                  "fc-focus-ring inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-slate-200 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-slate-800 shadow-sm transition",
+                  "hover:border-[#0F4C81]/30 hover:bg-slate-50",
+                  "disabled:cursor-not-allowed disabled:opacity-60",
+                )}
+                title="Download a PDF of status, your words, and team notes available on this case"
+              >
+                {isExportingSummary ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Preparing…
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-3.5 w-3.5" strokeWidth={2.2} />
+                    Full visit summary (PDF)
+                  </>
+                )}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={onRequestDataDeletion}
+              disabled={deletionBusy}
+              className="text-left text-[11.5px] font-medium text-slate-500 underline decoration-slate-300 decoration-dotted underline-offset-2 hover:text-slate-800 fc-focus-ring sm:text-right"
+            >
+              {deletionBusy ? "Sending request…" : "Request data removal (demo) → admin review"}
+            </button>
+          </div>
         )}
       </div>
       {isLoading ? (

@@ -20,9 +20,11 @@
  */
 
 import { useMemo, useState } from "react";
+import { useToast } from "@/components/shared/Toast";
 import {
   AlertTriangle,
   ArrowRight,
+  Download,
   ChevronDown,
   ChevronUp,
   HeartPulse,
@@ -927,8 +929,8 @@ function InputPanel({
       </button>
 
       <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-        AI runs three layers — NLP entity &amp; vital extraction, RAG against
-        clinical guidelines, then LLM verification — before any output renders.
+        Your words are checked against a clinical reference library, then organized into urgency and
+        next-step suggestions for the care team to review. Nothing here replaces a clinician.
       </p>
     </div>
   );
@@ -951,11 +953,65 @@ function OutputPanel({
   showFhir: boolean;
   setShowFhir: (b: boolean) => void;
 }) {
+  const toast = useToast();
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  const exportTriagePdf = async () => {
+    if (!result || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const { downloadTextPdf } = await import("@/lib/clientPdf");
+      const lines = [
+        "FrudgeCare — triage screen summary (demo)",
+        `Urgency: ${result.urgency}`,
+        result.urgencyReason,
+        "",
+        "Suggested next step for the care team",
+        result.recommendedRoute,
+        "",
+        "Clinical note (if provided)",
+        result.clinicianBrief || "—",
+        "",
+        result.llmProvider
+          ? `Assist source: ${result.llmProvider} ${result.llmModel ?? ""}`.trim()
+          : "Assist source: rules / knowledge base (no API response)",
+      ];
+      await downloadTextPdf(
+        `frudgecare-triage-${Date.now()}.pdf`,
+        "Triage summary (demo)",
+        lines,
+      );
+      toast.success("PDF saved", "Check your downloads folder.");
+    } catch (e) {
+      console.error(e);
+      toast.error("Export failed", "Try again in a moment.");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   return (
     <div className="fc-card overflow-hidden">
-      <div className="border-b border-slate-200 bg-slate-50/60 px-5 py-3 lg:px-6">
-        <div className="fc-eyebrow">Step 2</div>
-        <div className="text-[14px] font-semibold text-slate-900">Triage output</div>
+      <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50/60 px-5 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
+        <div>
+          <div className="fc-eyebrow">Step 2</div>
+          <div className="text-[14px] font-semibold text-slate-900">Triage output</div>
+        </div>
+        {result && !loading && !error && (
+          <button
+            type="button"
+            onClick={exportTriagePdf}
+            disabled={pdfBusy}
+            className="fc-focus-ring inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {pdfBusy ? "Preparing…" : (
+              <>
+                <Download className="h-3.5 w-3.5" />
+                Download PDF
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="p-5 lg:p-6">
@@ -964,7 +1020,7 @@ function OutputPanel({
         {!loading && error && (
           <div className="rounded-[12px] border border-rose-200 bg-rose-50 p-4 text-[13px] text-rose-800">
             <div className="mb-1 flex items-center gap-2 font-semibold">
-              <AlertTriangle size={14} /> AI engine error
+              <AlertTriangle size={14} /> Triage engine error
             </div>
             <div>{error}</div>
           </div>

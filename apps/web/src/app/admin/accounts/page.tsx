@@ -558,6 +558,120 @@ function ResetPasswordDialog({
   );
 }
 
+// DATA REMOVAL (demo) — requests land in cases.ai_patient_profile.deletion_request
+function DataDeletionPanel() {
+  const toast = useToast();
+  const [rows, setRows] = useState<
+    { id: string; caseCode: string | null; requestedAt: string; reason?: string; requestedBy?: string }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [acting, setActing] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/data-deletion");
+      if (!res.ok) throw new Error("load failed");
+      const j = (await res.json()) as { requests: typeof rows };
+      setRows(j.requests ?? []);
+    } catch {
+      toast.error("Could not load requests", "Check Supabase service role in .env.local.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const approve = async (id: string) => {
+    setActing(id);
+    try {
+      const res = await fetch("/api/admin/data-deletion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ case_id: id, approve: true }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "Approve failed");
+      toast.success("Approved", `deletion_approved_at_txt: ${j.deletion_approved_at_txt ?? "saved"}`);
+      await load();
+    } catch (e) {
+      toast.error("Approval failed", e instanceof Error ? e.message : "Try again");
+    } finally {
+      setActing(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+        <CircularProgress size={32} />
+      </Box>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <Box sx={{ p: 4, textAlign: "center", color: C.text3 }}>
+        No pending data-removal requests. Patients can start one from their status page (demo).
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      <Box sx={{ p: 2, borderBottom: `1px solid ${C.border}`, bgcolor: "#f8fafc" }}>
+        <Typography variant="body2" sx={{ color: C.text2, maxWidth: 720 }}>
+          When you approve, the case is redacted, marked closed, and the approval timestamp is stored in{" "}
+          <code>ai_patient_profile</code> as plain text (demo audit trail).
+        </Typography>
+      </Box>
+      {rows.map((r) => (
+        <Box
+          key={r.id}
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "1.2fr 1fr auto" },
+            gap: 2,
+            p: 2,
+            borderBottom: `1px solid ${C.border}`,
+            alignItems: "center",
+          }}
+        >
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              {r.caseCode ?? r.id}
+            </Typography>
+            <Typography variant="caption" color={C.text3}>
+              Requested: {r.requestedAt} {r.requestedBy ? `· ${r.requestedBy}` : ""}
+            </Typography>
+            {r.reason && (
+              <Typography variant="body2" sx={{ mt: 0.5, color: C.text2 }}>
+                {r.reason}
+              </Typography>
+            )}
+          </Box>
+          <Typography variant="caption" sx={{ fontFamily: "ui-monospace, monospace", color: C.text3 }}>
+            {r.id}
+          </Typography>
+          <Button
+            size="small"
+            variant="contained"
+            color="error"
+            disabled={acting === r.id}
+            onClick={() => approve(r.id)}
+          >
+            {acting === r.id ? "Working…" : "Approve & redact"}
+          </Button>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 // MAIN PAGE
 export default function AdminAccounts() {
   const [tab, setTab] = useState(0);
@@ -672,6 +786,7 @@ export default function AdminAccounts() {
             <Tab label={`Front Desk (${frontDesk.length})`} />
             <Tab label={`Admins (${admins.length})`} />
             <Tab label={`Patients (${patients.length})`} />
+            <Tab label="Data removal" />
           </Tabs>
         </Box>
 
@@ -749,6 +864,8 @@ export default function AdminAccounts() {
                 )}
               </Box>
             )}
+
+            {tab === 5 && <DataDeletionPanel />}
           </Box>
         )}
       </Box>

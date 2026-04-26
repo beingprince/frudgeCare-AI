@@ -12,11 +12,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "FrudgeCare • Clinical Platform",
-  description: "Next-generation healthcare workflow orchestration and event-driven care triage.",
-  icons: {
-    icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏥</text></svg>',
-  },
+  title: "FrudgeCare — Care coordination",
+  description:
+    "From intake to the care team: triage, nursing handoff, and provider follow-up in one flow (demo).",
 };
 
 export default function RootLayout({
