@@ -1131,6 +1131,50 @@ async def demo_synthea_patients():
 
 
 # ======================================================================
+# /community/similar — read-only Reddit similarity panel for /triage
+# ======================================================================
+#
+# Pulls top public Reddit threads from a small allowlist of clinically
+# adjacent subreddits (AskDocs, medicine, HealthAnxiety) that match the
+# user's symptom narrative. Used by the /triage page to show "people on
+# Reddit who described something similar" alongside the agent verdict.
+#
+# - No Reddit OAuth: anonymous .json endpoint with a descriptive UA.
+# - 5-minute in-process TTL cache per (query, subreddit).
+# - Always returns 200 with a structured envelope, even on outage.
+# - Public on purpose (same kiosk audience as /triage and /demo/*).
+
+from community import (
+    DEFAULT_SUBREDDITS as _DEFAULT_COMMUNITY_SUBS,
+    search_similar as _community_search_similar,
+)
+
+
+@app.get("/community/similar")
+async def community_similar(
+    q: str = "",
+    subs: Optional[str] = None,
+):
+    """Return a small ranked list of related Reddit threads.
+
+    Query params:
+      q     — symptom narrative or chief complaint (required, otherwise
+              returns an empty offline envelope).
+      subs  — comma-separated subreddit names. Defaults to the curated
+              allowlist defined in community.DEFAULT_SUBREDDITS.
+    """
+    requested: Optional[List[str]] = None
+    if subs:
+        requested = [s.strip() for s in subs.split(",") if s and s.strip()]
+        # Hard allowlist — clinical-adjacent only, no random subreddits.
+        allowed = {s.lower() for s in _DEFAULT_COMMUNITY_SUBS}
+        requested = [s for s in requested if s.lower() in allowed]
+        if not requested:
+            requested = list(_DEFAULT_COMMUNITY_SUBS)
+    return await _community_search_similar(q, requested)
+
+
+# ======================================================================
 # Care coordination orchestrator (unchanged)
 # ======================================================================
 

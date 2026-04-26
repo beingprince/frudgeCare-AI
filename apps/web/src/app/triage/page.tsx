@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { RoleChip } from "@/components/common/RoleChip";
 import { SyntheaPicker, type SyntheaSelection } from "./SyntheaPicker";
+import { CommunityPanel } from "./CommunityPanel";
 
 // ---------------------------------------------------------------------------
 // Scenarios — the demo's secret weapon. One click = filled textarea.
@@ -408,6 +409,10 @@ export default function TriagePage() {
   const [cascadeLoading, setCascadeLoading] = useState(false);
   const [cascadeError, setCascadeError] = useState<string | null>(null);
 
+  // Captured at submit time so the community panel can fetch against the
+  // exact narrative the user analysed, not what they're currently typing.
+  const [submittedNarrative, setSubmittedNarrative] = useState<string>("");
+
   const canSubmit = useMemo(
     () => symptomText.trim().length >= 12 && !loading,
     [symptomText, loading],
@@ -419,6 +424,7 @@ export default function TriagePage() {
     setAgeGroup(s.age);
     setCascade(null);
     setCascadeError(null);
+    setSubmittedNarrative("");
   };
 
   const handlePickSynthea = (selection: SyntheaSelection) => {
@@ -431,15 +437,18 @@ export default function TriagePage() {
     setError(null);
     setCascade(null);
     setCascadeError(null);
+    setSubmittedNarrative("");
   };
 
   const handleAnalyze = async () => {
+    const narrativeAtSubmit = symptomText.trim();
     setLoading(true);
     setResult(null);
     setError(null);
     setShowFhir(false);
     setCascade(null);
     setCascadeError(null);
+    setSubmittedNarrative(narrativeAtSubmit);
     try {
       const response = await fetch("/api/ai/analyze-intake", {
         method: "POST",
@@ -538,6 +547,12 @@ export default function TriagePage() {
             error={cascadeError}
             onRun={handleRunCascade}
           />
+        )}
+
+        {result && !error && submittedNarrative.length >= 12 && (
+          <div className="mt-5">
+            <CommunityPanel narrative={submittedNarrative} />
+          </div>
         )}
 
         <DisclaimerFooter />
