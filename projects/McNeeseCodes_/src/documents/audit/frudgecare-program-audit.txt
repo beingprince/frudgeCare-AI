@@ -1,0 +1,1452 @@
+================================================================================
+                  FRUDGECARE AI — PROGRAM AUDIT & QA DOCUMENT
+                   (Consolidated, Single-File, Handoff-Ready)
+================================================================================
+
+Document ID        : FC-AUDIT-0001
+Document version   : 1.0
+Audit date         : 2026-04-19
+Auditor role       : Documentation Specialist + Auditor + QA
+Scope              : Entire program (apps/web, services/ai-engine, supabase,
+                     documents/*) as present in the working tree on audit date.
+Audience           : Engineering, Product, Security, QA, Operations handoff.
+Format             : Dual-layer — every substantive section is given in
+                     (A) Natural human-level language AND (B) Technical format.
+Destination        : documents/audit/frudgecare-program-audit.txt  (new folder)
+Reason for folder  : The content is cross-cutting (product + auth + UX +
+                     backend + DB + AI + QA). No existing folder
+                     (ux design / engineering / mobile-design / product)
+                     owns cross-cutting audits. A new `audit/` folder keeps
+                     governance clean and discoverable.
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+  0. How to read this document
+  1. Executive summary                       (human + technical)
+  2. Product vision & roles                  (human + technical)
+  3. Technology stack & runtime architecture (human + technical)
+  4. Repository map (ground truth)
+  5. Environment, configuration & demo mode
+  6. Authentication & session logic          (human + technical)
+     6.1 Patient login
+     6.2 Staff login (5-step MFA)
+     6.3 Session (JWT) lifecycle & cookie
+     6.4 Route guard / middleware ("proxy.ts")
+     6.5 Logout
+     6.6 Audit logging for auth events
+     6.7 Role → panel mapping
+  7. End-to-end clinical workflow            (human + technical)
+     7.1 Patient intake  -> AI pre-triage
+     7.2 Front desk triage / queue / appointments
+     7.3 Nurse validation handshake (the contract)
+     7.4 Provider review / decision / receipt
+     7.5 Follow-up (stub) & patient dashboard feedback loop
+     7.6 Operations dashboard & audit trail
+     7.7 Case state machine
+  8. Page-by-page inventory (routes & behavior)
+  9. API inventory (Next.js route handlers + FastAPI)
+ 10. Database schema & RLS (Supabase migrations + seed)
+ 11. AI Engine (FastAPI / Gemini)
+ 12. UX governance & design system summary
+ 13. Mobile responsiveness posture
+ 14. QA findings — bugs, risks, gaps, non-conformance
+ 15. Security observations
+ 16. Performance / reliability notes
+ 17. Traceability matrix (spec <-> code)
+ 18. Recommendations & next actions
+ 19. Handoff checklist
+ 20. Appendices
+     A. Demo credentials
+     B. Case statuses (canonical)
+     C. File index (every read file, with size & purpose)
+     D. Glossary
+     E. Change log for this audit
+
+================================================================================
+0. HOW TO READ THIS DOCUMENT
+================================================================================
+
+A. HUMAN LANGUAGE
+-----------------
+Think of this file as a full "walk-through" of FrudgeCare AI. Each big topic
+is explained twice: first the way you would explain it to a non-technical
+stakeholder (nurse, product lead, hospital admin), then the way an engineer
+would read it (files, functions, endpoints, SQL). You can jump directly to
+any section via the table of contents. Every section closes with an explicit
+"what was verified" / "what is missing" note so this doubles as a QA log.
+
+B. TECHNICAL
+------------
+Sections are ordered from product intent -> runtime architecture -> auth ->
+workflow -> data layer -> QA. Code references point to relative paths inside
+the repo root:  C:/Users/prinx/OneDrive/Desktop/frudgeCareAI/
+Line numbers are not embedded (files still change); use the file path +
+symbol + a quick grep to locate any snippet referenced.
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+A. HUMAN LANGUAGE
+-----------------
+FrudgeCare AI is an "AI-orchestrated care coordination platform" — a web
+app that takes a patient's self-reported symptoms, lets an AI propose how
+urgent the case is, then walks the case through the hands of a Front Desk
+clerk, a Nurse (who must validate everything the AI suggested), and finally
+a Doctor/Provider who signs the final decision. Operations staff can watch
+the whole thing through a dashboard and an immutable audit log.
+
+The code is real and mostly works today in a DEMO mode:
+  - You can log in as any of four personas on the landing page and move
+    through the screens.
+  - The AI part (FastAPI microservice that calls Google Gemini) is wired
+    up and called from the Next.js app.
+  - Data is either read from an in-memory mock data set (12-20 realistic
+    cases) or, if Supabase env vars are set, from a real Postgres/Supabase
+    database using the migrations in supabase/migrations/.
+
+Two login flows exist:
+  - Patient: extremely low-friction — phone OR email + date of birth. No OTP.
+  - Staff  : a 5-step multi-factor flow (staff code + username -> OTP ->
+             email + password), with role-to-panel integrity checks.
+
+The system is feature-complete at the "hackathon demo" level, but there
+are tracked design-debt items (spec 21-known-design-debt.md), a production
+auth path that still relies on placeholders (bcrypt + Twilio), and many UI
+flows use mocked data rather than real DB inserts. QA-wise the screens are
+consistent, accessible, and follow a documented design system, but the
+nurse -> provider handoff contract, while well specified, is not fully
+enforced end-to-end (see § 7.3 and § 14).
+
+B. TECHNICAL
+------------
+- Monorepo (npm workspaces): apps/web (Next.js 16, React 19, TS, Tailwind,
+  MUI v9), services/ai-engine (FastAPI + google-genai), supabase (raw
+  migrations + seed), packages/* (reserved, empty today).
+- Two brand colors, two token systems (CSS vars + MUI `C`) — flagged debt.
+- Auth: jose (JWT HS256), httpOnly cookie `fc_session`, 8h staff / 12h
+  patient expiry, route prefix guard in `apps/web/src/proxy.ts`.
+- Demo bypass: `NEXT_PUBLIC_DEMO_MODE=true` disables middleware guard and
+  accepts canned credentials (see § 5, Appendix A).
+- Data path: `lib/supabase.ts` + `lib/mock-service.ts` (dual-path, same
+  shape).
+- AI path: `/api/ai/analyze-intake` proxies to
+  `http://localhost:8001/analyze-intake` on the FastAPI service.
+- State machine (spec 18) is implemented in part: nurse page enforces
+  handoff checklist, provider page has a "not-cleared gate", but audit
+  event `nurse.handoff_ready` is still a TODO (only a browser alert today).
+
+================================================================================
+2. PRODUCT VISION & ROLES
+================================================================================
+
+A. HUMAN LANGUAGE
+-----------------
+The platform presents itself as a "clinical traffic controller":
+  - Patient writes symptoms -> AI reads them -> suggests urgency and a
+    clinical brief.
+  - Front desk accepts or overrides urgency, assigns providers, books a
+    slot.
+  - Nurse confirms the AI's story is actually true (vitals, questionnaire,
+    red flags, AI flags acknowledged) BEFORE the doctor sees anything.
+  - Doctor makes the final call (prescribe, order test, refer, discharge).
+  - Everybody's action is written to an audit log.
+
+Roles:
+  Patient       – enters symptoms, watches status
+  Front Desk    – traffic control, urgency override, scheduling
+  Clinical Nurse– the coordination + data-validation gatekeeper
+  Doctor        – final clinical authority
+  Admin/Ops     – system and analytics oversight
+  AI Orchestr.  – generates drafts, never decides alone (human-in-the-loop)
+
+B. TECHNICAL
+------------
+Canonical source: documents/product/working flow and vision of the system.txt
+Role enum (TS)    : apps/web/src/types/index.ts
+    export type UserRole =
+      'patient' | 'front_desk' | 'provider' | 'operations' | 'admin';
+Role enum (SQL)   : supabase/migrations/20240417000000_initial_schema.sql
+    create type public.user_role as enum
+      ('patient','front_desk','provider','operations','admin');
+Note: A "nurse" role does NOT exist as a first-class DB/TS enum. The /nurse
+page is implemented and the workflow spec treats "Nurse" as a named role,
+but the DB role enum and the route guard do not recognize it. This is a
+real gap (see § 14, finding F-01).
+
+================================================================================
+3. TECHNOLOGY STACK & RUNTIME ARCHITECTURE
+================================================================================
+
+A. HUMAN LANGUAGE
+-----------------
+Three moving parts run side-by-side:
+  1. A Next.js web app (port 3000) — the thing users see + API routes.
+  2. A tiny Python FastAPI service (port 8001) — asks Google Gemini for the
+     AI triage JSON. It is a separate service on purpose so the web app
+     doesn't talk directly to Google.
+  3. Supabase Postgres (optional) — when configured, all real data lives
+     here. Without it, the app falls back to the in-memory mock dataset.
+
+The web app runs auth, UI, AI proxy, logout, and a demo-reset endpoint.
+The Python service runs AI and two "orchestrator" endpoints that enforce
+invariants (e.g. you can't mark a case 'provider_review_pending' unless a
+nurse explicitly validated it).
+
+B. TECHNICAL
+------------
+Root package.json workspaces: ["apps/*", "services/*", "packages/*"]
+Run scripts:
+    npm run dev        -> concurrently runs web + ai
+    npm run dev:web    -> next dev on :3000
+    npm run dev:ai     -> uvicorn main:app --reload --port 8001
+    npm run build      -> next build
+    npm run lint       -> next lint
+
+Web stack:
+  - Next.js (app router) — see documents/engineering/original_root/AGENTS.md:
+    "This is NOT the Next.js you know. This version has breaking changes
+    — read the relevant guide in node_modules/next/dist/docs/".
+  - React 19 + TypeScript (strict).
+  - Tailwind v4 utility CSS + MUI v9 (Material UI) coexistence.
+  - framer-motion for motion. lucide-react + @mui/icons-material for icons.
+  - jose for JWT. @supabase/supabase-js for DB. @google/generative-ai in JS
+    wrapper (lib/gemini.ts) — currently unused; real calls go to Python.
+  - recharts for operations dashboard charts.
+
+AI service stack:
+  - FastAPI + pydantic + google-genai (newer SDK; imports
+    `from google import genai`).
+  - CORS open to http://localhost:3000.
+  - Env: services/ai-engine/.env provides GEMINI_API_KEY.
+
+Cross-service contract (what the web calls):
+  POST /analyze-intake    { symptoms, duration, severity, patient_history? }
+  returns AIAnalysis { urgency, summary, risks[], reasoning, clinician_brief }
+
+Two orchestrator-style endpoints (exist, not currently called from web):
+  POST /orchestrator/handoff-to-provider
+  POST /orchestrator/submit-provider-action
+
+================================================================================
+4. REPOSITORY MAP (GROUND TRUTH)
+================================================================================
+
+A. HUMAN LANGUAGE
+-----------------
+Every important folder and what it holds:
+
+  apps/web                     The Next.js web application (UI + APIs)
+  apps/web/src/app             Route files (pages + API handlers)
+  apps/web/src/components      Reusable UI (shared, common, providers, ui)
+  apps/web/src/lib             Auth, Supabase, events, theme, mock data
+  apps/web/src/types           Shared TS types
+  apps/web/src/proxy.ts        Route-guard middleware (see § 6.4)
+  services/ai-engine           FastAPI service (Python)
+  supabase/migrations          DDL: schema + auth + coordination
+  supabase/seed.sql            Deterministic seed data
+  packages/                    Placeholder for shared libs (empty today)
+  documents/                   All governance + design docs
+  .env.local                   Local env (demo mode flag + Supabase keys)
+
+B. TECHNICAL
+------------
+apps/web/src/app (routes):
+  /                                landing + persona selector
+  /sign-in                         simplified identity selector (persona)
+  /auth/patient                    patient login (phone|email + DOB)
+  /auth/staff                      staff portal selector
+  /auth/staff/[panel]              5-step staff login (panel = admin |
+                                   front-desk | provider)
+  /patient/intake                  4-step intake wizard
+  /patient/status                  patient-facing case status + timeline
+  /patient/history                 past cases
+  /front-desk/queue                triage queue + detail panel
+  /front-desk/appointments         time-x-provider grid (MUI)
+  /front-desk/case/[id]            case review, urgency override, assign
+  /nurse                           3-column nurse workspace + handoff gate
+  /provider/daily                  provider's schedule for today
+  /provider/case/[id]              clinical review + decision rail
+  /provider/follow-up/[id]         STUB directory — no page.tsx present
+  /operations/dashboard            KPIs, funnel, trends, provider load
+  /operations/audit                immutable audit table
+  /settings                        profile + demo reset
+
+apps/web/src/app/api (handlers):
+  /api/auth/patient/login          POST  phone|email + DOB  -> JWT cookie
+  /api/auth/staff/verify-identity  POST  staff_code+username -> phone_masked
+  /api/auth/staff/send-otp         POST  user_id             -> sends OTP
+  /api/auth/staff/verify-otp       POST  user_id + otp_code  -> token
+  /api/auth/staff/login            POST  email+password+token -> JWT cookie
+  /api/auth/logout                 POST  deletes fc_session cookie
+  /api/ai/analyze-intake           POST  proxies to FastAPI :8001
+  /api/demo/reset                  POST  wipes dynamic tables + re-seeds
+
+supabase/migrations:
+  20240417000000_initial_schema.sql            core tables + enums + RLS
+  20240418000001_auth_schema.sql               staff_code, OTP, rate limit
+  20240419000000_care_coordination_boundaries  nurse_assessments,
+                                               provider_actions, expanded
+                                               case_status enum.
+
+================================================================================
+5. ENVIRONMENT, CONFIGURATION & DEMO MODE
+================================================================================
+
+A. HUMAN LANGUAGE
+-----------------
+There are two modes:
+  DEMO MODE  — everything is canned. OTP is "000000", staff password is
+              "demo1234", patient login accepts any phone/DOB. Middleware
+              route guard is disabled. Perfect for hackathon demos.
+  REAL MODE  — requires Supabase URL + anon key, a real bcrypt hash column
+              populated in `users.password_hash`, and a real OTP provider
+              (Twilio Verify is the placeholder).
+
+The toggle is a single env flag: NEXT_PUBLIC_DEMO_MODE=true.
+A JWT secret (JWT_SECRET) is also expected; if missing, a dev default is
+used which is fine for local, dangerous for production.
+
+B. TECHNICAL
+------------
+Relevant env vars (.env.local / service env):
+    NEXT_PUBLIC_DEMO_MODE             "true" | anything else
+    NEXT_PUBLIC_SUPABASE_URL          optional; triggers "configured" path
+    NEXT_PUBLIC_SUPABASE_ANON_KEY     optional; triggers "configured" path
+    JWT_SECRET                        HMAC key for HS256 JWT
+    AI_ENGINE_URL                     default http://localhost:8001/analyze-intake
+    GEMINI_API_KEY                    used by services/ai-engine/.env
+
+Demo constants (apps/web/src/lib/auth.ts):
+    DEMO_OTP         = '000000'
+    DEMO_PASSWORD    = 'demo1234'
+    SESSION_COOKIE   = 'fc_session'
+    SESSION_EXPIRY   = 8 hours (staff), 12 hours (patient — set per route)
+    MAX_ATTEMPTS     = 5 / 5 minutes
+    SUPPORT_EMAIL    = 'itsupport@frudgecare.demo'
+    SUPPORT_PHONE    = '+1 (555) 000-9999'
+
+Middleware DEMO bypass (apps/web/src/proxy.ts):
+    if (DEMO_MODE) return NextResponse.next();
+
+================================================================================
+6. AUTHENTICATION & SESSION LOGIC
+================================================================================
+
+6.1 PATIENT LOGIN
+-----------------
+A. HUMAN LANGUAGE
+A patient types their phone OR email plus date of birth. In demo mode,
+any combination is accepted as "John Miller" and the app drops them at
+/patient/intake. In real mode, the backend queries patient_profiles, checks
+the DOB matches, and drops them at /patient/status.
+
+B. TECHNICAL
+Route : apps/web/src/app/api/auth/patient/login/route.ts
+Input : { phone_or_email, date_of_birth }
+Demo  : issues JWT with role='patient', cookie maxAge = 12h,
+        redirect '/patient/intake'.
+Real  : supabase.from('patient_profiles')
+          .or('email.eq.<val>,phone.eq.<val>').single();
+        verifies date_of_birth; issues JWT; redirect '/patient/status'.
+UI    : apps/web/src/app/auth/patient/page.tsx (mobile-first dark/light shell).
+
+6.2 STAFF LOGIN — 5-STEP MFA
+---------------------------
+A. HUMAN LANGUAGE
+Staff go through five gates:
+  Step 1: Staff code (e.g. FD-001) + username (e.g. maria).
+  Step 2: System confirms identity and auto-sends an OTP to the phone on
+          file (masked display).
+  Step 3: User enters the 6-digit OTP. In demo, it's literally 000000.
+  Step 4: User enters email + password. In demo, email must match the
+          account on file and password must be "demo1234".
+  Step 5: System cross-validates all 5 factors AND checks the "panel"
+          (admin/front-desk/provider) matches the account's actual role.
+          If anything mismatches -> 403 + audit log.
+Success sets an httpOnly JWT cookie (fc_session) and redirects to the
+role's home page.
+
+B. TECHNICAL
+UI           : apps/web/src/app/auth/staff/[panel]/page.tsx
+Step 1+2 API : /api/auth/staff/verify-identity
+               - lookupDemoStaff(staff_code, username) OR Supabase query.
+               - returns user_id, role, name, phone_masked.
+               - checks `active` + `locked_until` (rate limit).
+Step 3 API   : /api/auth/staff/send-otp
+               - generateOTP() -> in demo always "000000"; logs to console
+                 via sendOTP().
+               - real mode: insert otp_sessions row, call Twilio (TODO).
+Step 4 API   : /api/auth/staff/verify-otp
+               - demo: hardcoded accept of "000000", returns random
+                 32-byte hex verification_token.
+               - real: look up latest matching otp_sessions row, check
+                 expires_at, set verified=true + verification_token.
+Step 5 API   : /api/auth/staff/login
+               - demo: find account by user_id in DEMO_STAFF_ACCOUNTS, check
+                 email, check password via verifyPassword (demo path
+                 accepts "demo1234"), check role === expected_panel,
+                 else 403 with role_mismatch_attempt audit event.
+               - real: supabase query eq(id).eq(email).eq(staff_code);
+                 verifyPassword; role check; inserts staff_login_attempts
+                 row on success/failure.
+               - Sets cookie `fc_session` via response.cookies.set with
+                 httpOnly, sameSite=lax, secure in production, maxAge 8h,
+                 path '/'.
+
+6.3 SESSION (JWT) LIFECYCLE & COOKIE
+-----------------------------------
+A. HUMAN LANGUAGE
+After any successful login the server creates a signed token that contains
+who you are and what role you have. It's stored in an httpOnly cookie so
+JavaScript can't steal it. Every protected page request goes through a
+middleware that checks that cookie.
+
+B. TECHNICAL
+Creation :   createSession() in lib/auth.ts
+             -> jose.SignJWT with HS256, 8h expiry, fields:
+                { userId, role, name, email, staffCode? }.
+Cookie   :   name='fc_session', httpOnly, sameSite='lax',
+             secure=(NODE_ENV==='production'), path='/'.
+Read     :   getSession() in lib/auth.ts:
+                cookies().get('fc_session')?.value -> jose.jwtVerify()
+                -> SessionPayload | null.
+Destroy  :   destroySession() + /api/auth/logout POST.
+
+6.4 ROUTE GUARD ("proxy.ts")
+----------------------------
+A. HUMAN LANGUAGE
+Every request to a protected page (e.g. /provider/*, /front-desk/*) is
+inspected. Missing cookie -> redirected to the right login page. Wrong
+role -> redirected back with ?error=wrong_role. Expired -> cookie cleared
++ redirected with ?error=session_expired.
+
+B. TECHNICAL
+File: apps/web/src/proxy.ts (Next.js edge "proxy" replacing legacy
+middleware.ts in this Next.js version).
+
+Protected prefixes:
+   /patient     roles: [patient]
+   /front-desk  roles: [front_desk]
+   /provider    roles: [provider]
+   /operations  roles: [operations, admin]
+   /admin       roles: [admin]
+
+Redirect table when unauthenticated:
+   patient    -> /auth/patient
+   front_desk -> /auth/staff/front-desk
+   provider   -> /auth/staff/provider
+   operations -> /auth/staff/admin   (note: ops reuses admin panel)
+   admin      -> /auth/staff/admin
+
+On valid JWT: sets x-user-id + x-user-role response headers for downstream
+server components.
+
+Matcher config:
+    ['/patient/:path*','/front-desk/:path*','/provider/:path*',
+     '/operations/:path*','/admin/:path*']
+
+DEMO bypass: if NEXT_PUBLIC_DEMO_MODE === 'true', the middleware short-
+circuits to NextResponse.next() — no auth enforced.
+
+6.5 LOGOUT
+----------
+A. HUMAN LANGUAGE
+Logs the event, wipes the cookie, returns success. Called from the sidebar
+"Sign Out" button and from the AppShell user dropdown. Ends by redirecting
+back to the appropriate login page.
+
+B. TECHNICAL
+Route : apps/web/src/app/api/auth/logout/route.ts
+       - getSession() -> logAuthEvent('session_destroyed', userId, …)
+       - response.cookies.delete('fc_session')
+Triggers: RoleSidebar.tsx `handleLogout()` -> router.push('/auth/staff'),
+         AppShell.tsx `handleLogout()` -> router.push('/auth/staff').
+
+6.6 AUDIT LOGGING FOR AUTH EVENTS
+---------------------------------
+A. HUMAN LANGUAGE
+Every auth action (identity verified, OTP sent, OTP failed, login ok, role
+mismatch, logout) is logged. In demo it goes to console; in production
+it is expected to persist to an audit_log / staff_login_attempts table.
+
+B. TECHNICAL
+Helper    : logAuthEvent() in lib/auth.ts
+Events    :
+  staff_identity_verified / staff_identity_failed
+  otp_requested / otp_verified / otp_failed
+  staff_login_success / staff_login_failed
+  patient_login
+  role_mismatch_attempt
+  session_destroyed
+Companion : logAudit() + logEvent() in lib/events.ts write to the
+            audit_log and events tables respectively.
+
+6.7 ROLE -> PANEL MAPPING (lib/auth.ts)
+--------------------------------------
+    ROLE_HOME:
+      patient    -> /patient/intake
+      front_desk -> /front-desk/queue
+      provider   -> /provider/daily
+      operations -> /operations/dashboard
+      admin      -> /admin/dashboard     <-- NOTE: /admin/dashboard has no
+                                            page.tsx today. See F-02.
+    ROLE_LOGIN_PATH:
+      'front-desk' -> 'front_desk'
+      'provider'   -> 'provider'
+      'admin'      -> 'admin'
+
+================================================================================
+7. END-TO-END CLINICAL WORKFLOW
+================================================================================
+
+7.0 ONE-PARAGRAPH NATURAL LANGUAGE VERSION
+------------------------------------------
+A patient opens the app, fills out a four-step intake wizard (basics,
+symptoms, scheduling preferences, review) and submits it. The app calls
+the AI engine, which returns an urgency level, a clinician brief, a
+patient-facing summary, and a list of risk flags. That submission becomes
+a "case" with status 'submitted'. The front desk sees it in the queue,
+can override urgency, assigns a provider, and books an appointment slot.
+The case moves into nurse triage: a nurse fills out a questionnaire,
+captures vitals (or explicitly says they weren't taken), confirms the
+AI draft brief is accurate, and ticks every item in a validation
+checklist. Only then can they "Send to Provider". The provider sees a
+three-rail clinical workspace (context | summary | decision), picks a
+next action (order test / prescribe / refer / close), writes an encounter
+note, optionally writes a patient-visible update, and signs. The patient
+sees status, action items, and timeline update. Operations watches
+throughput and audits overrides.
+
+7.1 PATIENT INTAKE -> AI PRE-TRIAGE
+-----------------------------------
+A. HUMAN LANGUAGE
+Patient fills out the four-step wizard. Step 2 is the clinically important
+one: chief complaint, severity (1-10 segmented buttons), context. On
+submit, an AI engine reads the text and returns:
+   urgency (high/medium/low), summary (patient-facing), risks[],
+   reasoning, clinician_brief (dense 2-3 sentence provider brief).
+
+B. TECHNICAL
+UI      : apps/web/src/app/patient/intake/page.tsx (client, 4 steps)
+AI Call : POST /api/ai/analyze-intake
+           -> proxies body to AI_ENGINE_URL (default
+              http://localhost:8001/analyze-intake)
+AI Svc  : services/ai-engine/main.py analyze_intake() calls Gemini
+          (model=gemini-1.5-flash, response_mime_type=application/json)
+Contract: IntakeRequest { symptoms, duration, severity, patient_history? }
+          AIAnalysis   { urgency, summary, risks[], reasoning,
+                         clinician_brief }
+NOTE    : The current intake UI (intake/page.tsx) does NOT call
+          /api/ai/analyze-intake; it only handles step navigation and does
+          not yet persist a case or invoke the AI. See F-03.
+
+7.2 FRONT DESK TRIAGE / QUEUE / APPOINTMENTS
+--------------------------------------------
+A. HUMAN LANGUAGE
+Front desk sees a split-pane queue (list + detail), can search, open a
+case, review the AI intake brief, override AI urgency (High/Medium/Low
+buttons with color semantics), and assign a provider. A separate
+appointments board renders today's schedule as a time x provider grid.
+
+B. TECHNICAL
+Queue    : apps/web/src/app/front-desk/queue/page.tsx
+           - Tailwind-only, split-pane 7/5.
+           - KPI strip (Open, Unassigned, Urgent, Scheduling).
+           - Search + "show unassigned only" toggle (checkbox, stubbed).
+           - Uses MOCK_QUEUE literal (4 rows) — DOES NOT YET read from
+             Supabase or mock-service. See F-04.
+           - Bottom docked CTA: Assign Provider / Reserve Slot / Send to
+             Nurse. CTAs are not wired to state.
+Appts    : apps/web/src/app/front-desk/appointments/page.tsx
+           - MUI v9. Reads MOCK_APPOINTMENTS + MOCK_PROVIDERS from
+             lib/mock-service.ts (real integration shape).
+           - Time-slot grid (08:00-16:30, 30-min rows) x providers.
+Case     : apps/web/src/app/front-desk/case/[id]/page.tsx
+           - Dual path: try Supabase (with 500ms race timeout) -> fall
+             back to getMockCaseById(id).
+           - Urgency override: writes audit_log + events + cases.update
+             via lib/events.ts helpers, then optimistic local update.
+           - Provider assignment panel (UI only, no write yet).
+
+7.3 NURSE VALIDATION HANDSHAKE (THE CONTRACT)
+---------------------------------------------
+A. HUMAN LANGUAGE
+This is the most important workflow boundary in the whole product. The
+nurse MUST explicitly tick everything before the "Send to Provider"
+button unlocks. The items are:
+  (1) Identity verified (pre-populated).
+  (2) Chief complaint + severity captured.
+  (3) Vitals captured OR explicit "not taken" reason.
+  (4) Associated + denied symptoms recorded.
+  (5) At least one finding authored OR "no abnormal findings" toggle.
+  (6) High-risk AI flags acknowledged.
+  (7) Handoff brief reviewed and explicitly confirmed (the AI draft is
+      not allowed to pass silently).
+The rule is codified in documents/ux design/18-workflow-ownership.md
+§ 3.2 and is enforced client-side in apps/web/src/app/nurse/page.tsx.
+
+B. TECHNICAL
+File             : apps/web/src/app/nurse/page.tsx
+Requirements[]   : REQUIREMENTS array (7 items) — each with passes(data,
+                   flags) predicate and a `hint`.
+Derived state    : `checklist` via useMemo; allPass = every(done).
+Send gate        : handleSend() noop when !isValidated || !allPass.
+Side effect gap  : On success, currently displays a browser alert(
+                   "Audit event: nurse.handoff_ready\nCase CAS-1045 moved
+                   to provider_pending.") but does NOT emit an event or
+                   move the case. See F-05 (severity: HIGH).
+Orchestrator EP  : services/ai-engine/main.py has a matching endpoint
+                   POST /orchestrator/handoff-to-provider which enforces
+                   is_validated=true + provider_handoff_brief non-empty.
+                   It is NOT called by the nurse page.
+
+7.4 PROVIDER REVIEW / DECISION / RECEIPT
+----------------------------------------
+A. HUMAN LANGUAGE
+Provider opens /provider/daily (today's appointments), clicks a case,
+and lands on a three-column clinical workspace:
+  Left   — patient context rail (demographics, diagnoses, risk, timeline).
+  Middle — clinical summary: chief complaint, nurse brief (validated),
+           vitals, assessment, meds, labs.
+  Right  — decision rail: next action (4 options), encounter note,
+           optional patient-visible update, and "Sign & submit".
+Before the provider can interact, the case must be "triage cleared"
+(nurse_in_progress -> nurse_validated). If not cleared, the page shows
+an informational "waiting on nurse" state with the nurse's name, pickup
+time, and an escalation button — NOT a hard block (per spec 18 § 3.4).
+After submit, a "Decision Receipt" with routing target is displayed;
+the case meta flips to "Closed / Decision signed". Data persists to
+localStorage via lib/decisions.ts.
+
+B. TECHNICAL
+Daily    : apps/web/src/app/provider/daily/page.tsx
+           - PROVIDER_ID hardcoded ('usr_pr_001') — to be derived from
+             session when auth is wired. See F-06.
+           - Supabase-first with 500ms race timeout -> mock fallback.
+Case pg  : apps/web/src/app/provider/case/[id]/page.tsx
+           - Uses getProviderCaseView(caseId) from _data/case-view.ts
+             (only "mock-001" case is fully modeled; any other id shows
+             not-found). See F-07.
+           - Not-cleared branch renders the informational gate + checklist
+             + Request escalation + (DEMO only) "Simulate handoff complete".
+           - Submit handler writes ProviderDecision to localStorage
+             (STORAGE_KEY='fc.provider.decisions.v1') via saveDecision().
+Decisions: _data/decisions.ts
+           - NextAction enum: order_in_clinic_test | prescribe_medication
+                              | refer_to_specialist | close_and_discharge.
+           - Each has a routed destination surfaced on the receipt.
+Sub-UI   : _components/PatientContextRail, ClinicalSummaryPanel,
+           DecisionActionRail, DecisionReceipt.
+
+7.5 FOLLOW-UP (STUB) & PATIENT DASHBOARD FEEDBACK
+-------------------------------------------------
+A. HUMAN LANGUAGE
+The patient dashboard shows status, next step CTA, upcoming appointment,
+reminders, action items, and a care-journey timeline. History shows past
+cases. A provider-side follow-up screen is referenced (/provider/follow-up/
+[id]) but its page.tsx does not exist today.
+
+B. TECHNICAL
+Status   : apps/web/src/app/patient/status/page.tsx (mock timeline data).
+History  : apps/web/src/app/patient/history/page.tsx (2 mock rows).
+Follow-up: directory exists under /provider/follow-up/[id] but empty.
+           UX spec README explicitly excludes it. See F-08 (tracked debt).
+
+7.6 OPERATIONS DASHBOARD & AUDIT TRAIL
+--------------------------------------
+A. HUMAN LANGUAGE
+Ops sees four KPIs (Active Cases, Avg Triage Time, Provider Backlog,
+Escalation Rate), a funnel, active bottlenecks, processing time trend
+area chart, pie chart of provider load, scheduling quality bars, and
+a small "AI Audit Highlights" table. A separate audit page shows the
+immutable log of field-level changes.
+
+B. TECHNICAL
+Dashboard: apps/web/src/app/operations/dashboard/page.tsx
+           - All data is in-file mock arrays (FUNNEL_DATA,
+             RESPONSE_TIME_DATA, LOAD_DIST_DATA, BOTTLENECKS,
+             AUDIT_HIGHLIGHTS). No API call.
+Audit pg : apps/web/src/app/operations/audit/page.tsx
+           - MOCK_AUDIT literal (2 rows). Two-axis scroll table with
+             sticky <thead>. Honors spec 16 §11.
+
+7.7 CASE STATE MACHINE (canonical vs actual)
+--------------------------------------------
+Canonical (spec 18 + care coordination migration):
+  submitted
+    -> front_desk_reviewed
+      -> nurse_in_progress
+        -> nurse_validated
+          -> provider_pending
+            -> provider_reviewed
+              -> disposition_finalized
+
+TypeScript CaseStatus (types/index.ts) is a superset that also carries
+legacy values (submitted, under_review, scheduled, confirmed) and AI
+stages (ai_pretriage_ready, intake_submitted). DB enum was expanded in
+20240419000000_care_coordination_boundaries.sql to include the new
+values. In the code, transitions are mostly made via optimistic UI
+updates — there is no single finite state machine helper. See F-09.
+
+================================================================================
+8. PAGE-BY-PAGE INVENTORY
+================================================================================
+
+(Each entry: purpose | key behaviors | data source | state (OK / partial /
+stub / issue) | linked findings)
+
+/  (landing)
+   Purpose : Persona picker onto role-specific home.
+   Source  : static.
+   State   : OK.
+
+/sign-in
+   Purpose : Simplified persona selector — localStorage fc_demo_role +
+             router.push(role home).
+   Source  : hardcoded DEMO_USERS array.
+   State   : OK (demo only).  Finding: patient here maps to intake not
+             status — intentional per flow but worth documenting (F-10).
+
+/auth/patient
+   Purpose : Patient login (phone|email + DOB).
+   State   : OK. Accessibility: native type="date", 56px min-height inputs
+             (mobile-first).
+
+/auth/staff
+   Purpose : Picks Admin / Front Desk / Provider panel.
+   State   : OK.
+
+/auth/staff/[panel]
+   Purpose : 5-step MFA staff login.
+   State   : OK. Step 2 is a "transient" step — identity verify
+             auto-advances to step 3 (OTP). This is intentional but the
+             progress bar label still says "Verification" for step 2
+             (never rendered as a form). Cosmetic only (F-11).
+
+/patient/intake
+   Purpose : Four-step intake wizard.
+   State   : PARTIAL — does not post anywhere, does not call AI, does not
+             create a case (F-03).
+
+/patient/status
+   Purpose : Patient's view of their current case.
+   State   : OK (mock).
+
+/patient/history
+   Purpose : List of past closed cases.
+   State   : OK (mock).
+
+/front-desk/queue
+   Purpose : Triage queue with detail panel.
+   State   : PARTIAL — uses its own 4-row literal (F-04).
+
+/front-desk/appointments
+   Purpose : Day calendar (time x provider).
+   State   : OK (reads from mock-service.ts).
+
+/front-desk/case/[id]
+   Purpose : Full case review + urgency override.
+   State   : OK. Writes to Supabase (when configured) + audit_log + events.
+
+/nurse
+   Purpose : Triage workspace + handoff gate.
+   State   : PARTIAL — checklist enforced, but handoff success does not
+             emit event / update case (F-05).
+
+/provider/daily
+   Purpose : Today's schedule.
+   State   : OK (dual path).
+
+/provider/case/[id]
+   Purpose : Clinical workspace + decision rail + receipt.
+   State   : OK for mock-001; any other id -> "Case not found" (F-07).
+             Uses localStorage for the "signed" decision state (F-12:
+             not durable across devices).
+
+/provider/follow-up/[id]
+   State   : STUB (directory but no page.tsx) — F-08.
+
+/operations/dashboard
+   State   : OK (all mock).
+
+/operations/audit
+   State   : OK (2 mock rows, proper table contract).
+
+/settings
+   Purpose : Edit profile fields (non-persistent) + demo reset.
+   State   : OK (demo reset POSTs /api/demo/reset).
+
+================================================================================
+9. API INVENTORY
+================================================================================
+
+(Pattern: method path -> purpose -> inputs -> outputs -> notes)
+
+9.1 NEXT.JS ROUTE HANDLERS (apps/web/src/app/api/**)
+----------------------------------------------------
+POST /api/auth/patient/login
+  inputs : { phone_or_email, date_of_birth }
+  outputs: { success, name?, redirect?, error? } + fc_session cookie.
+  notes  : DEMO accepts anything; REAL verifies against patient_profiles.
+
+POST /api/auth/staff/verify-identity
+  inputs : { staff_code, username }
+  outputs: { success, user_id, role, name, phone_masked } or
+           { success:false, error, support_email, support_phone, locked? }.
+
+POST /api/auth/staff/send-otp
+  inputs : { user_id }
+  outputs: { success, demo_otp? }.
+  notes  : REAL inserts otp_sessions; calls Twilio (TODO).
+
+POST /api/auth/staff/verify-otp
+  inputs : { user_id, otp_code }
+  outputs: { success, verification_token }.
+
+POST /api/auth/staff/login
+  inputs : { user_id, staff_code, email, password, verification_token,
+             expected_panel }
+  outputs: { success, role, name, redirect } + fc_session cookie.
+  notes  : expected_panel integrity; 403 on role mismatch.
+
+POST /api/auth/logout
+  outputs: { success:true } + cleared fc_session cookie.
+
+POST /api/ai/analyze-intake
+  inputs : { symptoms, duration, severity, patient_history? }
+  outputs: AIAnalysis JSON (passes through from FastAPI).
+  notes  : Returns 503 when AI engine unreachable.
+
+POST /api/demo/reset
+  inputs : none.
+  outputs: { success, message } or { error }.
+  notes  : Delete order: audit_log -> visit_notes -> events -> null
+           cases.linked_appointment_id -> appointments -> cases.
+           Re-inserts 1 case + 1 appointment + 2 events deterministically.
+           Only meaningful when Supabase is configured.
+
+9.2 FASTAPI (services/ai-engine/main.py)
+----------------------------------------
+GET  /health
+  outputs: { status: "healthy" }.
+
+POST /analyze-intake
+  inputs : IntakeRequest.
+  outputs: AIAnalysis.
+
+POST /orchestrator/handoff-to-provider
+  inputs : HandoffRequest { case_id, nurse_assessment_id, is_validated,
+                            provider_handoff_brief }
+  outputs: { success, new_case_status, message } or 403.
+  enforce: is_validated && provider_handoff_brief.trim() non-empty.
+
+POST /orchestrator/submit-provider-action
+  inputs : ProviderActionRequest { case_id, provider_user_id,
+                                   active_nurse_assessment_id, action_type,
+                                   remarks }
+  outputs: { success, new_case_status, action_status, message }.
+  enforce: active_nurse_assessment_id required.
+
+================================================================================
+10. DATABASE SCHEMA & RLS (SUPABASE)
+================================================================================
+
+A. HUMAN LANGUAGE
+The database is small and purposeful: users + patient profiles + cases +
+appointments + visit notes + events + audit log + auth extensions
+(staff_code, password_hash, OTP sessions, login attempts, patient sessions)
++ care-coordination extensions (nurse_assessments, provider_actions).
+Row-Level Security is enabled on everything but policies are minimal today
+(spec: one "Ops can view all" policy as an example). In demo, the anon key
+plus permissive app logic is used; in production real policies must be
+written per role.
+
+B. TECHNICAL
+Core enums (20240417):
+   user_role, case_status, urgency_level, appointment_status,
+   follow_up_type, severity_hint, contact_method.
+
+Core tables:
+   users                 (id, role, display_name, email, phone, active,
+                          department, timestamps)
+   patient_profiles      (patient_code unique, full_name, date_of_birth,
+                          sex, phone, email, allergies[], chronic[],
+                          emergency contact, preferred contact + language)
+   cases                 (case_code unique, patient_id, symptom_text,
+                          symptom_tags[], duration_text, severity_hint,
+                          urgency_suggested, urgency_final, urgency_reason,
+                          risky_flags[], structured_summary,
+                          assigned_front_desk_user_id,
+                          assigned_provider_user_id,
+                          linked_appointment_id (FK added after
+                          appointments table), status, source_channel)
+   appointments          (case_id, patient_id, provider_user_id,
+                          scheduled_date, start_time, end_time, status,
+                          location_label, queue_bucket, urgent_slot,
+                          reminder_state, reschedule_count)
+   visit_notes           (case_id, appointment_id, provider_user_id,
+                          visit_summary, assessment, outcome,
+                          follow_up_type, follow_up_timeframe,
+                          referral_flag/target, escalation_flag)
+   events                (event_name, case_id, patient_id, appointment_id?,
+                          actor_role, actor_user_id, timestamp, metadata)
+   audit_log             (table_name, record_id, field_name, old_value,
+                          new_value, changed_by_user_id, changed_by_role,
+                          reason, changed_at)
+
+Auth extensions (20240418):
+   users: + staff_code, password_hash, username, failed_login_attempts,
+            locked_until
+   otp_sessions      (user_id, otp_code, phone_last4, expires_at, verified,
+                      verification_token)
+   staff_login_attempts (user_id, ip_address, staff_code_tried,
+                         attempt_type, success, failure_reason,
+                         attempted_at)
+   patient_sessions  (patient_profile_id, session_token, expires_at)
+   Seed: ADM-001/sysadmin, FD-001/maria, PR-001/emily (all password_hash
+         placeholder; bcrypt required in production).
+
+Care coordination (20240419):
+   case_status enum gets: intake_submitted, ai_pretriage_ready,
+                           frontdesk_review, nurse_triage_pending,
+                           nurse_triage_in_progress, provider_review_pending,
+                           provider_action_issued, followup_pending.
+   nurse_assessment_status enum: draft, in_progress, completed, handed_off.
+   action_status enum:           pending, completed, deferred, refused.
+   nurse_assessments — full clinical triage row (discrete fields,
+                       coordination, narrative, validation metadata).
+   provider_actions  — provider's "next action" with due_date +
+                       patient_visible_update.
+   cases.active_nurse_assessment_id — links cases to the current
+                                      assessment (FK).
+
+RLS: enabled on users, patient_profiles, cases, appointments, visit_notes,
+     events, audit_log, otp_sessions, staff_login_attempts,
+     patient_sessions, nurse_assessments, provider_actions. Only a handful
+     of permissive policies exist today (auth tables: "Service role
+     manages…" with (true) with check(true)). Production policies are
+     still TODO. Finding F-13 (security).
+
+Seed (supabase/seed.sql):
+     3 users, 2 patient_profiles, 2 cases, 1 appointment, 3 events,
+     1 audit_log row.
+
+================================================================================
+11. AI ENGINE (FASTAPI / GEMINI)
+================================================================================
+
+A. HUMAN LANGUAGE
+This is a small Python service that does two things: (1) take patient
+intake text and ask Gemini for a structured JSON urgency + clinical
+brief, (2) expose two "orchestrator" endpoints that refuse to let data
+skip workflow invariants.
+
+B. TECHNICAL
+File     : services/ai-engine/main.py
+SDK      : `from google import genai` (newer SDK), Gemini 1.5 Flash.
+CORS     : allow_origins=['http://localhost:3000'], allow_credentials=True.
+Schemas  : IntakeRequest, AIAnalysis, HandoffRequest, ProviderActionRequest.
+Contract: response_mime_type='application/json' on generate_content.
+Env      : .env file — GEMINI_API_KEY.
+Port     : 8001 during dev (per root package.json); direct run defaults to 8000.
+Notes    :
+  - Orchestrator endpoints are currently pure validation + mocked DB
+    comments (TODO: real Supabase calls).
+  - No auth layer on FastAPI yet — the endpoints trust the web app,
+    which is only acceptable behind a closed network (F-14).
+
+================================================================================
+12. UX GOVERNANCE & DESIGN SYSTEM SUMMARY
+================================================================================
+
+A. HUMAN LANGUAGE
+The UX is heavily specified. Every route has a design file. There are
+workflow, implementation-safety, motion, and component specs. Rules are
+tiered into four classes: Mandatory, Transitional, Archetype-bound,
+Discouraged. The governance model is explicit about what's debt vs what's
+a bug.
+
+B. TECHNICAL
+Design docs (documents/ux design):
+  00 foundations       01 app-shell            02 landing
+  03 sign-in           04 auth-staff           05 auth-patient
+  06 patient-intake    07 patient-status       08 patient-history
+  09 fd-queue          10 fd-appointments      11 fd-case
+  12 provider-daily    13 provider-case        14 nurse
+  15 ops-dashboard     16 ops-audit            17 settings
+  18 workflow-ownership (spec of state machine + handoff contracts)
+  19 implementation-safety (scroll contracts, empty states, a11y)
+  20 motion-and-tone
+  21 known-design-debt
+  90..97 component specs (card, case header, dense table, status chip,
+         case timeline, form field, mobile sticky CTA, auth shell).
+
+Primitives used in code (apps/web/src/components/shared):
+  AppShell.tsx (in /common) — MUI + motion + role-aware side nav.
+  RoleSidebar.tsx          — legacy Tailwind sidebar (alt shell).
+  CaseHeader, CaseTimeline, DenseTable, Disclosure, EmptyState, FormField,
+  MobileStickyCTA, PageHeader/SectionHeader, Skeleton, StatusChip,
+  UrgencyChip, VitalsGrid, Cards (KPICard, ActionPanel, SummaryCard).
+
+Known debt (spec 21 + README § Must-resolve):
+  - Tailwind md=768 vs MUI md=900 breakpoint drift.
+  - Two primary blues (#0F4C81 patient vs #1565C0 staff).
+  - Two token systems (CSS vars vs MUI `C`).
+  - Nurse -> provider "gate" must become state-machine transition (F-05).
+  - Scroll contract declarations per page still required.
+  - Component specs (90+) were recently added to close latent drift.
+
+================================================================================
+13. MOBILE RESPONSIVENESS POSTURE
+================================================================================
+
+A. HUMAN LANGUAGE
+Patient and auth routes are genuinely mobile-first (44px+ inputs, sticky
+48px bottom CTA, bottom safe area). Staff workspaces (nurse, provider,
+operations, front desk) are workstation-primary but degrade gracefully:
+3-column layouts stack into 1-column, independent-rail scrolling reverts
+to whole-page scroll, data grids keep min-heights so they don't collapse.
+
+B. TECHNICAL
+Spec        : documents/mobile-design/mobile-spec.md
+Route class : documents/ux design/README.md (mobile-first / mobile-
+              supported / tablet-primary / desktop-primary / workstation-
+              only per route).
+Key rules   :
+  - Parent containers: flex-col / grid-cols-1 on mobile; md:grid md:grid-
+    cols-12 above 768px (Tailwind md).
+  - `md:h-screen md:overflow-hidden` + children `md:overflow-y-auto` gives
+    independent rails on desktop; mobile collapses to document scroll.
+  - Paddings: px-6 -> px-4 on mobile; sticky bottom CTA bars.
+  - iOS safe area respected via env(safe-area-inset-bottom).
+
+================================================================================
+14. QA FINDINGS — BUGS, RISKS, GAPS, NON-CONFORMANCE
+================================================================================
+
+Each finding uses this shape:
+  ID | Severity | Area | Evidence | Recommendation
+
+F-01 | MEDIUM  | Roles / Auth model
+  Evidence   : The role enum (TS + SQL) lacks 'nurse'. The /nurse page
+               and spec 18 presume a 'nurse' role. Route guard
+               (proxy.ts) has no /nurse protected prefix.
+  Recommend  : Add 'nurse' to UserRole + user_role (SQL enum) +
+               ROLE_HOME + proxy.ts protected routes; assign nurses a
+               staff_code and a panel login path.
+
+F-02 | MEDIUM  | Auth / Role home inconsistency
+  Evidence   : ROLE_HOME.admin -> '/admin/dashboard' but no such route
+               exists. After login an admin will 404.
+  Recommend  : Change ROLE_HOME.admin to '/operations/dashboard' or
+               '/settings'; or create /admin/dashboard page.
+
+F-03 | HIGH    | Patient intake does not submit
+  Evidence   : apps/web/src/app/patient/intake/page.tsx only manages
+               step state; no POST to /api/ai/analyze-intake; no case
+               insert. AI engine is not reached from end-user flow.
+  Recommend  : On "Submit Request", (a) POST to /api/ai/analyze-intake,
+               (b) insert cases row with status='intake_submitted' then
+               move to 'ai_pretriage_ready' on AI response, (c) emit
+               events.intake_submitted + events.urgency_suggested.
+
+F-04 | MEDIUM  | Front desk queue uses stale literal
+  Evidence   : front-desk/queue/page.tsx uses MOCK_QUEUE literal of 4
+               rows. Ignores lib/mock-service.ts and Supabase.
+  Recommend  : Replace with getMockCasesByStatus('submitted') (dual-path
+               with Supabase fallback like /front-desk/case/[id]).
+
+F-05 | HIGH    | Nurse handoff emits no event / no state change
+  Evidence   : nurse/page.tsx handleSend() -> window.alert(). No call to
+               FastAPI /orchestrator/handoff-to-provider. No case update.
+               Spec 18 § 3.2 requires `nurse.handoff_ready` audit event
+               and case transition to 'provider_pending'.
+  Recommend  : (1) Insert nurse_assessments row; (2) POST orchestrator
+               endpoint; (3) on 200, update cases.active_nurse_assessment_id
+               + status='provider_review_pending'; (4) emit event.
+
+F-06 | LOW     | Hardcoded provider ID in daily list
+  Evidence   : provider/daily/page.tsx has PROVIDER_ID='usr_pr_001'.
+  Recommend  : Read from session (getSession() server-side or header
+               x-user-id set by proxy).
+
+F-07 | MEDIUM  | Provider case view limited to one id
+  Evidence   : _data/case-view.ts only defines mock-001.
+  Recommend  : Generate a view builder that reads from mock-service
+               cases + nurse_assessments to build ProviderCaseView for
+               any case id.
+
+F-08 | LOW     | /provider/follow-up/[id] stub
+  Evidence   : Folder exists, page.tsx missing. Spec README excludes it.
+  Recommend  : Either ship MVP follow-up page or remove the directory
+               until it's ready.
+
+F-09 | MEDIUM  | No single case FSM helper
+  Evidence   : Transitions scattered (optimistic setState in several
+               pages). Status names in UI don't always match SQL enum
+               (e.g. "Nurse Pending" vs 'nurse_triage_pending').
+  Recommend  : Introduce lib/caseStateMachine.ts (pure function
+               transitions valid? + event name map). StatusChip should
+               map UI label <-> SQL enum.
+
+F-10 | LOW     | Sign-in "patient" lands on intake, not status
+  Evidence   : /sign-in maps patient -> /patient/intake; but
+               /api/auth/patient/login (real path) redirects to
+               /patient/status. Spec implies authenticated patients
+               should land on status.
+  Recommend  : Align both to /patient/status (new intake is CTA).
+
+F-11 | LOW     | Staff login step 2 is skipped but label remains
+  Evidence   : auth/staff/[panel]/page.tsx: identity verification auto-
+               advances to step 3 (OTP); progress bar still displays
+               STEP_LABELS[1]='Verification'.
+  Recommend  : Either render a visible "Verifying identity…" state for
+               step 2, or remove that step from the progress bar.
+
+F-12 | MEDIUM  | Provider decision persistence is localStorage only
+  Evidence   : _data/decisions.ts saves ProviderDecision to
+               window.localStorage key 'fc.provider.decisions.v1'. Not
+               durable across devices or sessions cleared by the
+               browser.
+  Recommend  : Replace saveDecision with POST to Supabase provider_actions
+               insert (schema already exists — 20240419 migration).
+
+F-13 | HIGH    | RLS policies minimal
+  Evidence   : Only permissive "Service role manages …" policies on
+               auth tables; no role-scoped SELECT/UPDATE policies on
+               cases/appointments/events/audit_log for staff roles.
+  Recommend  : Add policies per role before touching production
+               Supabase keys.
+
+F-14 | MEDIUM  | FastAPI service has no auth layer
+  Evidence   : No middleware on services/ai-engine/main.py. Any local
+               client can POST /analyze-intake.
+  Recommend  : Require a shared secret header or JWT verification from
+               the web app (pass-through of fc_session claims).
+
+F-15 | LOW     | Default JWT secret falls back to dev value
+  Evidence   : lib/auth.ts: JWT_SECRET default
+               'frudgecare-dev-secret-change-in-production'.
+  Recommend  : Fail to boot if JWT_SECRET not set in NODE_ENV='production'.
+
+F-16 | LOW     | Rate limit not enforced outside lockout flag
+  Evidence   : MAX_ATTEMPTS=5/5min constants exist; verify-identity
+               only reads `locked_until` (REAL path), but there is no
+               writer that increments failed_login_attempts -> sets
+               locked_until.
+  Recommend  : On failed verify-identity / verify-otp / login, increment
+               users.failed_login_attempts and set locked_until when >=
+               MAX_ATTEMPTS.
+
+F-17 | LOW     | Settings "Save changes" is a no-op
+  Evidence   : settings/page.tsx has a Save button with no handler.
+  Recommend  : Wire to users.update or hide until implemented.
+
+F-18 | LOW     | Operations dashboard is 100% mock
+  Evidence   : All arrays are in-file literals; spec 19 §8 requires
+               data-source + refresh-cadence declarations per chart.
+  Recommend  : Wire at least KPI strip to Supabase counts (cases,
+               events, appointments).
+
+F-19 | LOW     | Demo reset deletes events despite RLS
+  Evidence   : /api/demo/reset uses the anon client; in production RLS
+               would block the deletes.
+  Recommend  : Use service-role client or guard endpoint with DEMO_MODE
+               check.
+
+F-20 | INFO    | Nurse role missing from RoleSidebar + AppShell
+  Evidence   : RoleSidebar.ROLE_NAV has no 'nurse' key; AppShell
+               NAV_ITEMS has no "Nurse workspace" item.
+  Recommend  : Add once F-01 is resolved.
+
+================================================================================
+15. SECURITY OBSERVATIONS
+================================================================================
+
+S-1 JWT
+    OK: HS256 + httpOnly cookie + sameSite=lax + secure-in-production.
+    Risks: dev-default secret (F-15); no CSRF token for state-changing
+    POST endpoints beyond sameSite. Consider double-submit cookie or
+    origin check for sensitive endpoints.
+
+S-2 OTP
+    Demo OTP is printed to console and returned in the response body
+    (demo_otp field). This is explicitly demo-only but can leak if
+    NEXT_PUBLIC_DEMO_MODE ever ships to prod.
+
+S-3 Passwords
+    password_hash seed is '$2b$10$demo_hash_placeholder' which is not a
+    valid bcrypt hash. verifyPassword falls back to `return false` when
+    not in demo. Must be replaced with real bcrypt + rehash-on-login
+    logic before production.
+
+S-4 Rate limiting
+    Schema + constants exist; enforcement incomplete (F-16).
+
+S-5 RLS
+    Enabled but minimally policied (F-13).
+
+S-6 FastAPI
+    Unauthenticated endpoints (F-14).
+
+S-7 CORS
+    AI engine: allow_origins=['http://localhost:3000'] — OK for local.
+    Widen only with env-driven list.
+
+S-8 Logging
+    Auth events logged to console in demo. Ensure audit_log writes in
+    real mode cover all of: identity_failed, role_mismatch_attempt,
+    session_destroyed.
+
+S-9 Input validation
+    Patient login uses a raw supabase `.or(…)` string interpolated with
+    user input — low risk because Supabase-JS PostgREST string filters
+    are parameterized, but prefer `.eq()` builder to avoid accidental
+    PostgREST injection via operator confusion.
+
+S-10 Demo reset endpoint
+    /api/demo/reset has no auth; if shipped to prod with DEMO_MODE off
+    it would still run (it doesn't check DEMO_MODE). Guard it.
+
+================================================================================
+16. PERFORMANCE / RELIABILITY NOTES
+================================================================================
+
+P-1 Supabase race timeout
+    /front-desk/case/[id] and /provider/daily wrap supabase queries in
+    a Promise.race against a 500ms timeout and fall back to mock. This
+    is a great demo-resilience pattern but will mask real slowness in
+    production. Replace with loader states + backoff.
+
+P-2 Next.js turbopack dev
+    apps/web/.next/dev tree shows turbopack is enabled; build-manifest
+    and transform chunks are large. Not a concern for dev; ensure
+    .gitignore covers .next (it does, via standard Next.js template).
+
+P-3 Client-heavy pages
+    Most pages are "use client" + framer-motion. Consider server
+    components for the shell and for pages that don't need JS state
+    (history, audit) to reduce bundle.
+
+P-4 Mock data is in the bundle
+    lib/mock-service.ts ships to the client. For production, either
+    mark with `if (process.env.NODE_ENV === 'development')` guards or
+    move behind /api/demo/*.
+
+================================================================================
+17. TRACEABILITY MATRIX (SPEC <-> CODE)
+================================================================================
+
+Spec                                          -> Implementation
+---------------------------------------------------------------
+documents/product/working flow and vision     -> end-to-end flow §7
+documents/ux design/03-sign-in.md             -> app/sign-in/page.tsx
+documents/ux design/04-auth-staff.md          -> app/auth/staff/* + api/auth/staff/*
+documents/ux design/05-auth-patient.md        -> app/auth/patient/page.tsx
+documents/ux design/06-patient-intake.md      -> app/patient/intake/page.tsx
+documents/ux design/07-patient-status.md      -> app/patient/status/page.tsx
+documents/ux design/08-patient-history.md     -> app/patient/history/page.tsx
+documents/ux design/09-fd-queue.md            -> app/front-desk/queue/page.tsx
+documents/ux design/10-fd-appointments.md     -> app/front-desk/appointments/page.tsx
+documents/ux design/11-fd-case.md             -> app/front-desk/case/[id]/page.tsx
+documents/ux design/12-provider-daily.md      -> app/provider/daily/page.tsx
+documents/ux design/13-provider-case.md       -> app/provider/case/[id]/*
+documents/ux design/14-nurse.md               -> app/nurse/page.tsx
+documents/ux design/15-operations-dashboard   -> app/operations/dashboard/page.tsx
+documents/ux design/16-operations-audit       -> app/operations/audit/page.tsx
+documents/ux design/17-settings.md            -> app/settings/page.tsx
+documents/ux design/18-workflow-ownership.md  -> nurse checklist (partial),
+                                                 provider "not cleared" gate,
+                                                 FastAPI orchestrator.
+documents/ux design/19-implementation-safety  -> shared/Skeleton, EmptyState,
+                                                 DenseTable min-width,
+                                                 operations/audit two-axis scroll.
+documents/ux design/20-motion-and-tone.md     -> framer-motion usage, chart
+                                                 palette in ops dashboard.
+documents/mobile-design/mobile-spec.md        -> patient routes + md:breakpoint
+                                                 rules across staff pages.
+supabase/migrations/*.sql                     -> types/index.ts + lib/events.ts
+                                                 + FastAPI orchestrator schemas.
+
+================================================================================
+18. RECOMMENDATIONS & NEXT ACTIONS
+================================================================================
+
+Immediate (security + contract)
+  1. Fix F-02 (admin ROLE_HOME) — one-line change.
+  2. Fix F-15 (JWT secret fail-fast in prod).
+  3. Guard F-19/F-10/F-18 demo-only endpoints behind DEMO_MODE or
+     service-role client.
+  4. Add nurse role end-to-end (F-01 + F-20).
+
+Product (core loop)
+  5. Wire patient intake submit -> AI analyze -> cases insert (F-03).
+     This is the single highest-value fix — it connects the whole app.
+  6. Wire nurse handoff -> FastAPI orchestrator -> case transition +
+     audit event (F-05).
+  7. Persist provider decisions to provider_actions (F-12).
+
+Hardening
+  8. Implement rate limiting writes (F-16), bcrypt password verify
+     (replace placeholder), real OTP via Twilio Verify.
+  9. Write per-role RLS policies on cases, events, audit_log (F-13).
+ 10. Add auth to FastAPI (F-14).
+
+Quality-of-life / debt
+ 11. Unify Tailwind & MUI breakpoints (spec 21 debt item).
+ 12. Consolidate token systems (CSS vars vs MUI `C`).
+ 13. Build central FSM helper (F-09).
+ 14. Replace hard gates with spec 18 § 3.4 informational gates everywhere.
+ 15. Remove the stub /provider/follow-up/[id] directory until a page
+     is ready (F-08).
+
+================================================================================
+19. HANDOFF CHECKLIST
+================================================================================
+
+[X] This document is placed at
+    documents/audit/frudgecare-program-audit.txt
+[X] Folder `documents/audit/` was created (did not exist before).
+[X] Single-file requirement satisfied — no companion docs produced.
+[X] Both human-language and technical representations included per
+    substantive section.
+[X] All program concerns covered:
+      product vision .............. §2
+      architecture ................ §3
+      repo map .................... §4
+      configuration / demo mode ... §5
+      login logic ................. §6 (patient + staff + session +
+                                          middleware + logout + audit)
+      end-to-end workflow ......... §7
+      page inventory .............. §8
+      API inventory ............... §9
+      data layer .................. §10
+      AI engine ................... §11
+      UX governance ............... §12
+      mobile posture .............. §13
+      QA findings (20) ............ §14
+      security (10) ............... §15
+      performance (4) ............. §16
+      traceability ................ §17
+      recommendations ............. §18
+[X] Findings are individually ID'd (F-01..F-20) and severity-rated.
+[X] Appendices attached (credentials, statuses, file index, glossary,
+    change log).
+[ ] Reviewer to sign off after reading §1 (executive summary) and §14
+    (QA findings).
+
+================================================================================
+20. APPENDICES
+================================================================================
+
+A. DEMO CREDENTIALS (lib/auth.ts DEMO_STAFF_ACCOUNTS)
+  ADM-001 / sysadmin / admin@frudgecare.demo   / role=admin
+  FD-001  / maria    / maria@frudgecare.demo   / role=front_desk
+  PR-001  / emily    / emily@frudgecare.demo   / role=provider
+  OTP always:        000000
+  Password always:   demo1234
+  Patient (any phone/email + any DOB accepted in demo).
+
+B. CASE STATUSES
+  Canonical (spec 18):
+    submitted -> front_desk_reviewed -> nurse_in_progress ->
+    nurse_validated -> provider_pending -> provider_reviewed ->
+    disposition_finalized.
+  TS (types/index.ts) superset includes also:
+    intake_submitted, ai_pretriage_ready, frontdesk_review,
+    nurse_triage_pending, nurse_triage_in_progress,
+    provider_review_pending, provider_action_issued, in_visit,
+    followup_pending, referred, resolved, cancelled, escalated,
+    submitted (legacy), under_review (legacy), scheduled, confirmed.
+  SQL enum: same set (20240419 added all new values).
+  UrgencyLevel: high | medium | low.
+  NurseAssessmentStatus: draft | in_progress | completed | handed_off.
+  ActionStatus: pending | completed | deferred | refused.
+
+C. FILE INDEX (files consulted during audit)
+  package.json
+  apps/web/src/app/layout.tsx
+  apps/web/src/app/page.tsx
+  apps/web/src/app/sign-in/page.tsx
+  apps/web/src/app/auth/patient/page.tsx
+  apps/web/src/app/auth/staff/page.tsx
+  apps/web/src/app/auth/staff/[panel]/page.tsx
+  apps/web/src/app/patient/intake/page.tsx
+  apps/web/src/app/patient/status/page.tsx
+  apps/web/src/app/patient/history/page.tsx
+  apps/web/src/app/front-desk/queue/page.tsx
+  apps/web/src/app/front-desk/appointments/page.tsx
+  apps/web/src/app/front-desk/case/[id]/page.tsx
+  apps/web/src/app/nurse/page.tsx
+  apps/web/src/app/provider/daily/page.tsx
+  apps/web/src/app/provider/case/[id]/page.tsx
+  apps/web/src/app/provider/case/[id]/_data/case-view.ts
+  apps/web/src/app/provider/case/[id]/_data/decisions.ts
+  apps/web/src/app/operations/dashboard/page.tsx
+  apps/web/src/app/operations/audit/page.tsx
+  apps/web/src/app/settings/page.tsx
+  apps/web/src/app/api/auth/patient/login/route.ts
+  apps/web/src/app/api/auth/staff/verify-identity/route.ts
+  apps/web/src/app/api/auth/staff/send-otp/route.ts
+  apps/web/src/app/api/auth/staff/verify-otp/route.ts
+  apps/web/src/app/api/auth/staff/login/route.ts
+  apps/web/src/app/api/auth/logout/route.ts
+  apps/web/src/app/api/ai/analyze-intake/route.ts
+  apps/web/src/app/api/demo/reset/route.ts
+  apps/web/src/proxy.ts
+  apps/web/src/lib/auth.ts
+  apps/web/src/lib/events.ts
+  apps/web/src/lib/gemini.ts
+  apps/web/src/lib/supabase.ts
+  apps/web/src/lib/mock-service.ts
+  apps/web/src/lib/theme.ts (referenced; not fully read)
+  apps/web/src/lib/utils.ts
+  apps/web/src/types/index.ts
+  apps/web/src/components/common/AppShell.tsx
+  apps/web/src/components/common/RoleSidebar.tsx
+  apps/web/src/components/shared/* (list only)
+  services/ai-engine/main.py
+  services/ai-engine/requirements.txt
+  supabase/migrations/20240417000000_initial_schema.sql
+  supabase/migrations/20240418000001_auth_schema.sql
+  supabase/migrations/20240419000000_care_coordination_boundaries.sql
+  supabase/seed.sql
+  documents/product/working flow and vision of the system.txt
+  documents/ux design/README.md
+  documents/ux design/18-workflow-ownership.md
+  documents/ux design/19-implementation-safety.md
+  documents/mobile-design/mobile-spec.md
+  documents/engineering/original_root/README.md
+  documents/engineering/original_root/AGENTS.md
+  documents/engineering/original_root/CLAUDE.md
+
+D. GLOSSARY
+  Case            — A single patient concern opened by intake. Has a
+                    case_code (FC-C-####) and flows through the state
+                    machine.
+  Intake          — Patient-authored symptom submission.
+  AI pre-triage   — AI-generated urgency + brief + risks done before
+                    any human review.
+  Handoff brief   — Nurse-confirmed text that travels to the provider.
+  Validation
+  checkpoint      — The 7-item gate in /nurse that unblocks "Send to
+                    Provider".
+  Provider
+  decision        — Provider's signed next-action on a case
+                    (ProviderAction in DB).
+  Demo mode       — `NEXT_PUBLIC_DEMO_MODE=true`. Enables canned
+                    credentials and bypasses the middleware route guard.
+  Proxy.ts        — This Next.js version's edge middleware entry (the
+                    AGENTS.md warns Next's APIs differ).
+  fc_session      — httpOnly JWT cookie used for auth across all roles.
+  RLS             — Supabase / Postgres Row-Level Security.
+
+E. CHANGE LOG FOR THIS AUDIT
+  2026-04-19  v1.0  Initial audit; dual-format document created and
+                    placed at documents/audit/frudgecare-program-audit.txt.
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================

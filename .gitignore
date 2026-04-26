@@ -82,8 +82,12 @@ apply-comment-strategy.js
 extract_comments.js
 paraphrase-comments.js
 
-# Internal design and audit notes (not part of the public submission)
+# Internal design and audit notes (not part of the public submission).
+# The submission folder ships its own curated copy under
+# projects/McNeeseCodes_/src/documents/, so explicitly un-ignore it.
 documents/
+!projects/McNeeseCodes_/src/documents/
+!projects/McNeeseCodes_/src/documents/**
 
 # Local notebooks and scratch files
 *.bak

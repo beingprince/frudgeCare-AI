@@ -1,0 +1,105 @@
+# 07 — `/patient/status` (Patient Care Dashboard)
+
+Source: `apps/web/src/app/patient/status/page.tsx`. AppShell-bypassed.
+
+---
+
+## 1. Viewport / Frame Size
+
+- `bg-[#F8FAFC] min-h-screen text-slate-900 pb-20` (80 px bottom reserve for mobile sticky CTA).
+- Full-bleed hero (white) + content column pulled up with `-mt-4`.
+
+## 2. Max Content Width
+
+- Main content container: `max-w-[720px] mx-auto` → **720 px** (patient-friendly narrow).
+
+## 3. Left / Right Margins
+
+- Hero header: `px-4 md:px-6` (16 → 24).
+- Content column: `px-4 md:px-6`.
+- Mobile sticky CTA: `p-4` (16).
+
+## 4. Grid Columns
+
+- Row 1 (Status + Next Step): single column `flex flex-col gap-6`.
+- Row 2 (Appointment + Reminder): `grid-cols-1 md:grid-cols-2 gap-4 md:gap-6`.
+- Row 3 (Action items) + Row 4 (Timeline): single-column.
+
+## 5. Gutters
+
+- Content column sections: `gap-6 md:gap-8` (24 → 32).
+- Row 2 inner: `gap-4 md:gap-6` (16 → 24).
+- Row 1 inner stack: `gap-6` (24).
+- Action items list: `gap-3` (12).
+
+## 6. Padding Inside Cards
+
+| Card | Padding | Radius |
+|---|---|---|
+| Status chip card | `p-6` (24) | `rounded-[20px]` (20) |
+| Next Step CTA card (blue) | `p-6` (24) | `rounded-[20px]` (20) |
+| Upcoming Visit | `p-6` (24) | `rounded-[16px]` (16) |
+| Reminder (amber) | `p-6` (24) | `rounded-[16px]` (16) |
+| Action Items | `p-5 md:p-6` (20/24) | `rounded-[16px]` (16) |
+| Timeline card | `p-5 md:p-6` | `rounded-[16px]` |
+
+- Action-item row: `p-3` (12), `rounded-xl` (12).
+- CTA button inside next-step card: `px-5 py-3 rounded-[12px]`.
+
+## 7. Vertical Spacing Between Sections
+
+- Hero padded `py-6 pb-8 pt-8 md:pt-12`.
+- Content column negative offset: `-mt-4` to overlap hero.
+- Row spacing: `gap-6 md:gap-8`.
+
+## 8. Font Sizes / Line Heights
+
+| Element | Size | Style |
+|---|---|---|
+| Hero H1 `Hi, Jonathan` | `text-[28px] md:text-[32px]` | 700 `tracking-tight` primary-colored |
+| Hero sub | `text-[15px]` | muted, `max-w-sm` |
+| Card eyebrow `CURRENT CASE STATUS` | `text-[12px]` | 700 UPPER `tracking-widest` |
+| Status chip text | `text-[16px]` | 600 |
+| Status paragraph | `text-[15px]` | 500 `leading-relaxed` |
+| Next-Step eyebrow | `text-[12px]` | 700 UPPER `tracking-widest` |
+| Next-Step H3 | `text-[20px]` | 600 |
+| Next-Step sub | `text-[14px]` | — `max-w-[280px]` |
+| Next-Step button | `text-[15px]` | 700 |
+| Upcoming label | `text-[14px]` | 700 UPPER |
+| Upcoming date | `text-[18px]` | 700 |
+| Upcoming time | `text-[15px]` | 500 |
+| Reminder title | `text-[14px]` | 700 UPPER |
+| Reminder body | `text-[15px]` | 500 `leading-relaxed` |
+| Action items H3 | `text-[18px]` | 700 |
+| Action-item title | `text-[15px]` | 500 |
+| Timeline H3 | `text-[18px]` | 700 |
+
+## 9. Breakpoint Behavior
+
+- `md` (≥ 768):
+  - Row 2 splits into 2 columns.
+  - Hero top padding `pt-8 → pt-12`.
+  - Card inner padding `p-5 → p-6`.
+  - Section gaps `gap-6 → gap-8`.
+  - Mobile sticky CTA bar hidden (`md:hidden`).
+
+## 10. Depth / Elevation
+
+- Status card: `shadow-elevated`.
+- Next-step blue card: `shadow-resting` → `shadow-elevated` on hover.
+- Other content cards: `shadow-resting`.
+- Mobile sticky CTA bar: `shadow-[0_-4px_20px_rgba(0,0,0,0.05)]`.
+
+---
+
+## 10. Route Classification
+
+**mobile-first.** 720-px readable column; KPIs, appointments, actions, timeline all stack on mobile.
+
+## 11. Scroll Owner / Overflow Contract
+
+- **Outer frame**: AppShell-bypassed. `min-h-screen` flex-col.
+- **Scroll owner**: `<body>`.
+- **Fixed elements**: sticky top brand header; sticky bottom CTA on `< md` (hidden on `md+`).
+- **Contract**: all internal sections are in document flow; page grows vertically and scrolls naturally.
+- **Long timeline / action list**: no internal scroll � more items = longer page.

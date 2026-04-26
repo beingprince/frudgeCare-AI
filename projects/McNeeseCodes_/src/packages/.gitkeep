@@ -1,0 +1,2 @@
+# Reserved for shared TypeScript packages. The npm workspace root declares
+# `packages/*` so future shared modules can live here without restructuring.

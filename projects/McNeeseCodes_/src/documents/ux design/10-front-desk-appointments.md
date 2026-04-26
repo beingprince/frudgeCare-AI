@@ -1,0 +1,110 @@
+# 10 — `/front-desk/appointments` (Appointment Board)
+
+Source: `apps/web/src/app/front-desk/appointments/page.tsx`. MUI-first layout.
+
+---
+
+## 1. Viewport / Frame Size
+
+- Outer Box: `height: "100%"; display: flex; flexDirection: column; bgcolor: C.background`.
+- Split into **fixed-height header row** + **scrollable body**.
+
+## 2. Max Content Width
+
+- Body inner rail: `maxWidth: 1280; mx: "auto"` → **1280 px**.
+- Calendar grid itself: `minWidth: 800` within horizontal scroll (handles very narrow screens via `overflowX: auto`).
+
+## 3. Left / Right Margins
+
+- Header: `px: { xs: 2, sm: 3 }` → 16 / 24.
+- Header vertical: `py: 2` (16).
+- Body: `p: { xs: 2, sm: 3 }` → 16 / 24 all sides.
+
+## 4. Grid Columns
+
+### Summary strip
+`gridTemplateColumns: { xs: "1fr 1fr", sm: "1fr 1fr 1fr" }` → 2-col mobile, 3-col from `sm`.
+
+### Calendar body (the signature pattern)
+`gridTemplateColumns: "80px repeat(N, 1fr)"` where N = providers (MOCK_PROVIDERS.length = 3 by default).
+- Left 80 px column for time label.
+- Equal-flex columns for each provider.
+
+### Time-slot rows
+- Rendered as additional grid rows with the same column template, `minHeight: 72`.
+
+## 5. Gutters
+
+- Body rail vertical gaps: `gap: 3` (24).
+- Summary strip gaps: `gap: 2` (16).
+- Calendar does NOT use grid `gap` — separation is via `border-right: 1px solid C.border` between columns and `border-bottom` between rows.
+- Header right-cluster: `gap: 1.5` (12).
+
+## 6. Padding Inside Cards / Cells
+
+- Summary cards (`<Card>`): default 12 px `CardContent` padding (`py: "12px !important"`, `pl: 2.5` = 20).
+- Summary card has 3 px accent bar on left edge (`&::before { width: 3 }`).
+- Provider header cell: `p: 1.75` (14).
+- Time-label cell: `pt: 1.25; px: 1` (10 / 8).
+- Appointment-slot cell (outer): `p: 0.75` (6).
+- Appointment card body: `p: 1.25` (10).
+- Appointment empty slot: dashed border, `height: 64`, transparent until hover.
+- Date navigator: `IconButton p: 1`, label `px: 2` (16).
+
+## 7. Vertical Spacing Between Sections
+
+- Header → body: 1 px border only.
+- Body inner sections: `gap: 3` (24).
+- Calendar internal rows: 0 gap, separated by `borderBottom`.
+
+## 8. Font Sizes / Line Heights
+
+| Element | Size | Style |
+|---|---|---|
+| Breadcrumb link | 0.75 rem / 12 px | 500 |
+| Page title | `{ xs: 1.1rem, sm: 1.3rem }` (17.6 / 20.8) | 700 |
+| Urgent chip | 0.688 rem / 11 px | 700 |
+| Date-nav label | 0.75 rem / 12 px | 600 |
+| Summary label | 0.563 rem / 9 px | 700 UPPER `+0.1em` |
+| Summary value | 1.75 rem / 28 px | 800 `-0.03em` `lh 1.2` |
+| Provider header name | 0.688 rem / 11 px | 700, provider-color |
+| Provider header sub | 0.563 rem / 9 px | — muted |
+| Time label (monospace) | 0.688 rem / 11 px | 600 |
+| Appointment patient name | 0.688 rem / 11 px | 700 |
+| Appointment time/location | 0.563 rem / 9 px | 500 |
+| Appointment symptom | 0.563 rem / 9 px | clamped 1 line |
+| Legend labels | 0.688 rem / 11 px | — |
+
+## 9. Breakpoint Behavior
+
+- `xs`: summary = 2 cols; header padding 16 px.
+- `sm`: summary = 3 cols; header padding 24 px.
+- The calendar grid itself does NOT collapse — it keeps 3 provider columns and relies on horizontal scroll (`overflowX: auto`) for narrow screens. `minWidth: 800` ensures readability.
+- Time-row scroll: the rows are wrapped in their own scroll container with `maxHeight: "calc(100vh - 340px)"`.
+
+## 10. Depth / Color Accents
+
+- Each provider has an assigned tint via `PROV_COLORS`.
+- Appointment cell: left 4 px border-left in the provider color; background `alpha(color, 0.06)` with hover `alpha(color, 0.10)`.
+- Urgent appointments: small red priority icon + pulsing red dot.
+
+## 11. Fixed Heights
+
+- Empty slot: 64 px.
+- Appointment slot: ≥ 64 px (`minHeight: 64`).
+- Time row: `minHeight: 72`.
+
+---
+
+## 10. Route Classification
+
+**workstation-only.** Calendar board uses `minWidth: 800` and does not collapse � intentionally tablet-to-desktop only. Do not ship this on phone.
+
+## 11. Scroll Owner / Overflow Contract
+
+- **Outer frame**: AppShell `<main>`.
+- **Scroll owner**: two-axis � the calendar region owns **horizontal scroll** (because `minWidth: 800 px` forces overflow on narrow viewports) and the outer `<main>` owns **vertical scroll**.
+- **Header-fixed behavior**: page header stays in place; body scrolls under it.
+- **Row height**: each time-row is a fixed height; content does not expand vertically.
+- **Empty appointment slots**: must render a dashed placeholder cell, never collapse height.
+- **Below tablet width**: user must horizontal-scroll. Document this in the UI (already: "Best viewed on tablet/desktop").

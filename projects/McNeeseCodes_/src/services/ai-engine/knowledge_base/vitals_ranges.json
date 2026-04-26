@@ -1,0 +1,118 @@
+{
+  "bp_systolic": {
+    "field": "BP Systolic",
+    "unit": "mmHg",
+    "normal": [90, 130],
+    "warning_low": 90,
+    "warning_high": 140,
+    "critical_low": 80,
+    "critical_high": 180,
+    "messages": {
+      "critical_low": "Systolic <80 — shock physiology, rapid evaluation required.",
+      "warning_low": "Below normal — check perfusion, orthostatic vitals.",
+      "warning_high": "Stage 2 hypertension range.",
+      "critical_high": "Hypertensive crisis threshold exceeded — evaluate for end-organ damage."
+    }
+  },
+  "bp_diastolic": {
+    "field": "BP Diastolic",
+    "unit": "mmHg",
+    "normal": [60, 85],
+    "warning_low": 60,
+    "warning_high": 90,
+    "critical_low": 50,
+    "critical_high": 120,
+    "messages": {
+      "critical_low": "Diastolic <50 — concern for shock.",
+      "warning_low": "Below normal range.",
+      "warning_high": "Elevated diastolic.",
+      "critical_high": "Diastolic >120 — hypertensive emergency threshold."
+    }
+  },
+  "pulse": {
+    "field": "Pulse",
+    "unit": "bpm",
+    "normal": [60, 100],
+    "warning_low": 50,
+    "warning_high": 110,
+    "critical_low": 40,
+    "critical_high": 130,
+    "messages": {
+      "critical_low": "Severe bradycardia — evaluate for heart block, hypothyroid, medication.",
+      "warning_low": "Bradycardia — check meds (β-blocker, CCB), training state.",
+      "warning_high": "Tachycardia — investigate cause (pain, fever, dehydration, anemia).",
+      "critical_high": "Severe tachycardia — rule out arrhythmia, sepsis, hemorrhage, PE."
+    }
+  },
+  "o2_sat": {
+    "field": "O2 Saturation",
+    "unit": "%",
+    "normal": [95, 100],
+    "warning_low": 94,
+    "warning_high": null,
+    "critical_low": 90,
+    "critical_high": null,
+    "messages": {
+      "critical_low": "Severe hypoxemia — immediate supplemental O2 and airway assessment.",
+      "warning_low": "Below normal — ensure proper pulse-ox placement; monitor closely."
+    }
+  },
+  "temp_f": {
+    "field": "Temperature",
+    "unit": "°F",
+    "normal": [97.0, 99.5],
+    "warning_low": 96.0,
+    "warning_high": 100.4,
+    "critical_low": 95.0,
+    "critical_high": 103.0,
+    "messages": {
+      "critical_low": "Hypothermia — rewarming protocol.",
+      "warning_low": "Low temperature — recheck, consider environmental vs sepsis (paradoxical hypothermia in elderly).",
+      "warning_high": "Febrile — common infection screen.",
+      "critical_high": "High fever — evaluate for sepsis, consider cultures and aggressive cooling."
+    }
+  },
+  "respiratory_rate": {
+    "field": "Respiratory Rate",
+    "unit": "breaths/min",
+    "normal": [12, 20],
+    "warning_low": 10,
+    "warning_high": 22,
+    "critical_low": 8,
+    "critical_high": 30,
+    "messages": {
+      "critical_low": "Severe bradypnea — concern for CNS/opioid effect; support ventilation.",
+      "warning_low": "Bradypnea — check medication, consciousness.",
+      "warning_high": "Tachypnea — possible infection, metabolic acidosis, PE, anxiety.",
+      "critical_high": "Severe tachypnea — imminent respiratory failure possible."
+    }
+  },
+  "pain_score": {
+    "field": "Pain Score",
+    "unit": "/10",
+    "normal": [0, 3],
+    "warning_low": null,
+    "warning_high": 6,
+    "critical_low": null,
+    "critical_high": 9,
+    "messages": {
+      "warning_high": "Moderate-severe pain — address promptly.",
+      "critical_high": "Severe pain — prompt assessment and treatment."
+    }
+  },
+  "glucose": {
+    "field": "Blood Glucose",
+    "unit": "mg/dL",
+    "normal": [70, 140],
+    "warning_low": 70,
+    "warning_high": 180,
+    "critical_low": 54,
+    "critical_high": 300,
+    "messages": {
+      "critical_low": "Severe hypoglycemia — immediate D50 or oral glucose if able.",
+      "warning_low": "Hypoglycemia — oral glucose, recheck in 15 min.",
+      "warning_high": "Hyperglycemia — assess symptoms, rule out DKA/HHS.",
+      "critical_high": "Marked hyperglycemia — check ketones, pH, anion gap."
+    }
+  }
+}

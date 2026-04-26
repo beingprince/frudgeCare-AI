@@ -1,0 +1,126 @@
+# 04 — `/auth/staff` (Panel Selector) + `/auth/staff/[panel]` (MFA Login)
+
+Both routes are **bypassed** by AppShell (`BYPASS_PREFIXES = ["/auth/", "/patient/"]`), so they render full-screen.
+
+---
+
+## A. `/auth/staff` — Panel Selector
+
+Source: `apps/web/src/app/auth/staff/page.tsx`.
+
+### 1. Viewport / Frame
+- `min-h-screen flex flex-col items-center justify-center`.
+- Background: gradient `from-[#0a1628] via-[#0F1E35] to-[#0a1628]` + SVG dotted grid overlay at `opacity-40`.
+
+### 2. Max Content Width
+- Inner: `max-w-4xl w-full` → **56 rem / 896 px**.
+
+### 3. Left / Right Margins
+- Outer: `p-6` (24).
+- Card: `p-8` (32).
+
+### 4. Grid Columns
+- Panels grid: `grid-cols-1 md:grid-cols-3` — 1 column mobile, 3 at `md` (≥ 768).
+
+### 5. Gutters
+- Panels grid: `gap-6` (24).
+- Column stack: `space-y-12` (48) between header, grid, patient-link footer.
+- Header internal: `space-y-4` (16).
+
+### 6. Padding Inside Cards
+- Each panel link (`bg-white/5 backdrop-blur-xl`): `p-8` (32), `rounded-[2.5rem]` (40).
+- Icon square: `w-14 h-14` (56), `rounded-2xl`, `mb-6` (24) to body.
+- Body stack: `space-y-2` (8) then `mb-6` (24) to CTA row.
+
+### 7. Vertical Spacing Between Sections
+- Header → grid → footer: `space-y-12` (48) each step.
+
+### 8. Font Sizes / Line Heights
+| Element | Size | Style |
+|---|---|---|
+| Eyebrow `Secure Clinical Access` | `text-xs` (12) | 900 UPPER `tracking-[0.3em]` |
+| H1 `Staff Portal` | `text-5xl` → `lg:text-7xl` (48 → 72) | 900 italic UPPER `tracking-tighter` |
+| Subhead | default (16) | 500, `max-w-md`, muted |
+| Panel label | `text-[10px]` | 900 UPPER `tracking-[0.3em]` |
+| Panel name | `text-xl` (20) | 700, `leading-tight` |
+| Panel desc | `text-xs` (12) | `leading-relaxed` |
+| CTA row | `text-xs` (12) | 900 UPPER `tracking-widest` |
+
+### 9. Breakpoint Behavior
+- `md`: 1 → 3 columns for panels.
+- `lg`: H1 scale bumps from 5xl → 7xl.
+
+---
+
+## B. `/auth/staff/[panel]` — Multi-factor Staff Login
+
+Source: `apps/web/src/app/auth/staff/[panel]/page.tsx`.
+
+### 1. Viewport / Frame
+- `min-h-screen flex items-center justify-center` with the same dark gradient as the selector.
+- Padding: `p-4 md:p-6` (16 → 24).
+
+### 2. Max Content Width
+- Column: `w-full max-w-md` → **448 px**.
+
+### 3. Left / Right Margins
+- Outer: 16 / 24 px depending on viewport.
+- Card: `p-8` (32 px).
+- Success loading card: `p-12` (48 px).
+
+### 4. Grid Columns
+- Single column layout. The only grid-like row is the **OTP row**: `flex gap-2 justify-center` with 6 inputs (each `w-12 h-14` = 48 × 56).
+
+### 5. Gutters
+- Outer column: `space-y-8` (32) between back-link block, error banner, step form.
+- Progress bar bars: `flex gap-1.5` (6).
+- Form fields: `space-y-4` (16) inside `.space-y-6` (24) card.
+
+### 6. Padding Inside Cards / Forms
+- Form card: `p-8` (32) with `rounded-[2.5rem]` (40).
+- Error banner: `p-4` (16), `rounded-2xl` (16).
+- Identity-confirmed banner (step 4): `p-4` (16).
+- Input fields: `px-5 py-4` (20 / 16) with `rounded-2xl` (16).
+- Submit button: `py-4` (16) full-width.
+
+### 7. Vertical Spacing Between Sections
+- Header block: `space-y-6` (24) (back-link, title, progress bar).
+- Inside header title block: `space-y-2` (8).
+- Progress bar labels: `space-y-2` (8).
+- Error/OTP/Password inner spacing: `space-y-6` (24).
+
+### 8. Font Sizes / Line Heights
+| Element | Size | Style |
+|---|---|---|
+| Back link | `text-sm` (14) | 700 UPPER `tracking-widest` |
+| Panel pill | `text-[10px]` | 900 UPPER `tracking-[0.3em]` |
+| H1 `Secure Login` | `text-3xl` (30) | 900 italic UPPER `tracking-tighter` `leading-none` |
+| Subhead | `text-sm` (14) | default |
+| Progress text | `text-[10px]` | 900 UPPER `tracking-widest` |
+| Field label | `text-[10px]` | 900 UPPER `tracking-[0.3em]` |
+| Input (staff code) | `text-lg` (18) | font-mono `tracking-widest` |
+| OTP digits | `text-xl` (20) | 900 |
+| Button | `text-xs` (12) | 900 UPPER `tracking-[0.2em]` |
+| Inline demo hint | `text-[10px]` | italic |
+
+### 9. Breakpoint Behavior
+- Purely mobile-first single column; `p-4 md:p-6` is the only responsive tweak.
+- OTP row uses `gap-2` and does not reflow; 6 × `w-12` = 288 px — fits within 448 px column.
+
+### 10. Motion
+- Step transitions: `framer-motion` horizontal slide `x: 30 → 0 → -30`.
+- Error banner: fade-down `y: -10 → 0`.
+- Success (step 5): `scale: 0.9 → 1`.
+
+---
+
+## 10. Route Classification
+
+**desktop-primary.** Full-screen panel selector (AppShell-bypassed). Designed for = 1024 px; `md:grid-cols-3` collapses to 1-col on mobile.
+
+## 11. Scroll Owner / Overflow Contract
+
+- **Outer frame**: page is AppShell-bypassed. Uses natural `min-h-screen` with dark gradient.
+- **Scroll owner**: `<body>` (natural document scroll � the `overflow: hidden` on root is still active but this route sets its own full-screen container; see globals).
+- **Contract**: content fits within viewport at = md; below md, page grows vertically and scrolls naturally.
+- **The MFA sub-route `/auth/staff/[panel]`**: same bypass; fixed `max-w-md` form; internal step transitions do not introduce nested scroll.

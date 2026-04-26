@@ -1,0 +1,49 @@
+FRUDGECARE AI: WORKING FLOW AND VISION
+========================================
+
+VISION: "The AI-Orchestrated Care Coordination Platform"
+------------------------------------------------------
+FrudgeCare is not just a digital health record; it is an active clinical traffic controller. Our vision is to eliminate the 'administrative friction' in healthcare by using AI to proactively orchestrate the journey from symptom to resolution, ensuring that doctors, nurses, and admin staff are always 3 steps ahead.
+
+THE SYSTEM FLOW (The Action Loop)
+---------------------------------
+
+1. PATIENT INTAKE (The Spark)
+   - Patient fills out a symptom-focused dynamic form.
+   - An AI Intelligence Layer parses the narrative into discrete clinical markers.
+
+2. AI PRE-TRIAGE (The Filter)
+   - System identifies urgency (High/Medium/Low).
+   - Generates a "Patient Summary Brief" for the front desk.
+
+3. RESOURCE MATCHING (Front Desk)
+   - Front desk reviews the AI brief.
+   - System identifies available providers and exam rooms.
+   - Proposals for appointment slots are automatically pushed to the patient.
+
+4. CLINICAL COORDINATION (The Nurse Handshake)
+   - The Clinical Nurse (Primary Coordinator) contacts the patient.
+   - AI provides a protocol-driven questionnaire (e.g., SBAR based) to deepen the clinical pool.
+   - Nurse records/validates answers; AI creates a structured Narrative + Discrete profile.
+
+5. PROVIDER REVIEW (Doctor Decision)
+   - Doctor receives a "Ready for Review" case, pre-organized with AI-generated priorities.
+   - Doctor edits the case and generates "Test Orders" or "Treatment Steps."
+
+6. THE SAFETY LOOP (Nurse & AI)
+   - Clinical staff receive the orders.
+   - Staff can "Comply" or "Refuse with Remarks" (Human-in-the-loop safety).
+   - AI reformulates the updated case context after each interaction.
+
+7. CONTINUOUS RESOLUTION
+   - Treatment continues while the patient dashboard updates in real-time.
+   - Case analytics are fed back into the system to improve future orchestration.
+
+ROLES & RESPONSIBILITIES
+------------------------
+- PATIENT: Source of truth for symptoms; consumer of care status.
+- FRONT DESK: Traffic management and resource allocation.
+- CLINICAL NURSE: The core coordinator and gatekeeper of AI clinical data.
+- DOCTOR: Final clinical authority and decision maker.
+- ADMIN: System configuration and high-level workflow orchestration.
+- AI (The Orchestrator): The background engine moving data and proposing next steps.
