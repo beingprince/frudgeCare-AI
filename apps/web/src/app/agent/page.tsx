@@ -40,6 +40,7 @@ import {
   Workflow,
   Zap,
 } from "lucide-react";
+import { ModelChip, RoleChip } from "@/components/common/RoleChip";
 
 // ---------------------------------------------------------------------
 // Types — mirror the FastAPI /ai/agentic-triage response shape.
@@ -81,6 +82,8 @@ type AgentResponse = {
   max_steps: number;
   tools_offered: string[];
   model: string;
+  /** Which LLM provider produced the synthesis. New in F-05. */
+  provider?: "openai" | "gemini" | "deterministic" | string;
   elapsed_ms: number;
   stop_reason: string;
   architecture: string;
@@ -348,10 +351,21 @@ export default function AgentPage() {
                 Tool-calling clinical agent
               </div>
             </div>
+            <RoleChip
+              audience="judge"
+              detail="Engineering preview · agent reasoning trace"
+              className="hidden md:inline-flex"
+            />
           </div>
-          <div className="hidden md:flex items-center gap-1.5 px-2.5 h-7 rounded-full border border-emerald-200 bg-emerald-50 text-[11px] font-semibold text-emerald-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            6 tools · KB-grounded · Gemini-synthesised
+          <div className="hidden md:flex items-center gap-2">
+            <ModelChip
+              model={response?.model}
+              mode={response?.synthesis_mode}
+            />
+            <div className="flex items-center gap-1.5 px-2.5 h-7 rounded-full border border-emerald-200 bg-emerald-50 text-[11px] font-semibold text-emerald-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              6 tools · KB-grounded
+            </div>
           </div>
         </div>
       </div>

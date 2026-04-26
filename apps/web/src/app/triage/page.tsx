@@ -43,6 +43,7 @@ import {
   Database,
   Zap,
 } from "lucide-react";
+import { RoleChip } from "@/components/common/RoleChip";
 
 // ---------------------------------------------------------------------------
 // Scenarios — the demo's secret weapon. One click = filled textarea.
@@ -566,6 +567,11 @@ function TopBar({
               Clinical Triage &amp; Care Coordination Assistant
             </div>
           </div>
+          <RoleChip
+            audience="patient"
+            detail="Self-service kiosk · no login"
+            className="hidden md:inline-flex"
+          />
         </div>
 
         <div className="hidden items-center gap-2 lg:flex">
