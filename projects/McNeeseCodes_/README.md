@@ -212,16 +212,13 @@ The Staff Console has four tabs. Front Desk Queue. Nurse Triage. Provider Daily 
 ## 6. Demo
 
 
-Live walkthrough. See `demo/demo-script.md` for the three minute script the team uses during judging.
+Live walkthrough during judging. The team will run the three minute scripted demo from a single laptop with the dev stack from the Setup Instructions above. The script the presenter follows on stage, including a recovery path for things that can fail live, is in `demo/demo-script.md`.
 
 
-Screenshots. The eight screenshots referenced in the script live in the `demo/` folder.
+No recorded video and no committed screenshots ship with this submission. The team chose to spend the final hours on product polish (patient triage redesign, real pharmacy navigation, nurse demo-vitals presets) rather than on screen recording. Judges who want to see the product without attending the live demo can clone the repository and run the four shell commands in Setup Instructions; the AI engine works against deterministic Tier-3 fallbacks even without API keys, so the patient triage flow at `http://localhost:3000/triage` runs out of the box.
 
 
-Recorded demo video. To be added before submission.
-
-
-Live deployment. The system runs locally. See Setup Instructions above.
+Live deployment. The system is intended to run locally for the demo. There is no public URL.
 
 
 
@@ -229,14 +226,14 @@ Live deployment. The system runs locally. See Setup Instructions above.
 ## 7. Source Code
 
 
-The full source lives at the root of the repository. This `projects/McNeeseCodes_/` folder is the hackathon submission entry. The actual code lives where the build tooling expects it.
+Two equivalent copies of the source ship together so judges can review the code without leaving the organizer's monorepo, and the working repository can keep its own development history.
 
 
-* `apps/web/` for the Next.js frontend
-* `services/ai-engine/` for the Python FastAPI AI engine
+* `projects/McNeeseCodes_/src/` — the full vendored source tree (Next.js frontend, FastAPI AI engine, Supabase migrations, design + engineering documents). 213 files, ~2.2 MB. This is what judges read inside the hackathon submission folder. See `src/README.md` for the file-by-file index.
+* `apps/web/` and `services/ai-engine/` at the repository root — the same code, in the layout the npm workspace declaration and the FastAPI imports expect at runtime. This is what `npm run dev` actually runs.
 
 
-The submission `src/` folder contains a one page index pointing at the real folders. See `src/README.md`.
+The two trees are kept byte-identical at submission time. For day-to-day development, work happens at the repository root; the `projects/McNeeseCodes_/src/` copy is refreshed before each push.
 
 
 
