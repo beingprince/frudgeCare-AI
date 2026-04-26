@@ -229,11 +229,11 @@ Live deployment. The system is intended to run locally for the demo. There is no
 Two equivalent copies of the source ship together so judges can review the code without leaving the organizer's monorepo, and the working repository can keep its own development history.
 
 
-* `projects/McNeeseCodes_/src/` — the full vendored source tree (Next.js frontend, FastAPI AI engine, Supabase migrations, design + engineering documents). 213 files, ~2.2 MB. This is what judges read inside the hackathon submission folder. See `src/README.md` for the file-by-file index.
-* `apps/web/` and `services/ai-engine/` at the repository root — the same code, in the layout the npm workspace declaration and the FastAPI imports expect at runtime. This is what `npm run dev` actually runs.
+* `projects/McNeeseCodes_/src/` — vendored copy of the application (Next.js frontend, FastAPI AI engine, Supabase migrations, design + engineering documents). As of the last refresh: **212 tracked files**, **about 2.05 MB** on disk under this folder (measured with a recursive file listing, excluding anything git-ignored). See `src/README.md` for layout. Judges can read everything here without leaving the hackathon monorepo.
+* `apps/web/` and `services/ai-engine/` at the repository root — the same tree in the layout `npm` workspaces and the FastAPI process expect. This is what you run day to day.
 
 
-The two trees are kept byte-identical at submission time. For day-to-day development, work happens at the repository root; the `projects/McNeeseCodes_/src/` copy is refreshed before each push.
+The vendored tree is **refreshed from the root before submission pushes** and should match. It is not continuously diff-tested in CI; the repository root is canonical if anything ever drifts. A spot-check (SHA-256 of `apps/web/.../nurse/case/[caseId]/page.tsx` in both places) has matched on every recent sync.
 
 
 

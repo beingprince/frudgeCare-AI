@@ -1,23 +1,20 @@
-# Demo Materials
+# Demo materials
 
 
-This folder contains the materials a judge needs to see the product without running it locally.
+What actually ships in this commit:
 
 
+* `demo-script.md` — the three-minute walkthrough the presenter uses during judging, including recovery steps when something fails on stage.
+* `README.md` — this file.
 
 
-## Contents
+What does **not** ship (the team used the time for product work instead of asset capture):
 
 
-* `demo-script.md`. The three minute walkthrough used during judging, including a recovery script for things that can fail on stage.
+* No `01-landing.png` through `08-console-operations.png` screenshot set. The script in `demo-script.md` still names those filenames as *what to show on the projector* during a live run; those image files were never added to the repo.
+* No `demo-video.mp4` screen recording in this folder.
 
-
-* Screenshots from `01-landing.png` through `08-console-operations.png`. Eight screenshots of the running application. The full filename list and what each one captures is in the screenshots manifest section of `demo-script.md`.
-
-
-* `demo-video.mp4`. Optional. A three minute screen recording of the same walkthrough. To be added before submission if the team has time to record.
-
-
+Judges who need visuals without a live machine should rely on the live demo during the event, or clone and run per `../README.md` Setup Instructions (four shell commands).
 
 
 ## How to run the demo locally
