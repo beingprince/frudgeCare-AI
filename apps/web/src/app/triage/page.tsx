@@ -393,6 +393,37 @@ function normalizeCascade(raw: unknown): CascadeData {
 }
 
 // ---------------------------------------------------------------------------
+// FRONT-DESK HANDOFF helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Map a /triage Urgency string ("CRITICAL" | "URGENT" | "SEMI-URGENT" |
+ * "ROUTINE") onto the case-table urgency vocabulary used by
+ * /front-desk/queue ("Emergency" | "Urgent" | "Routine"). The two were
+ * developed independently and we don't want to silently downgrade
+ * critical cases when they hit the queue.
+ */
+function mapUrgencyToCaseLevel(u: string): "Emergency" | "Urgent" | "Routine" {
+  const upper = (u || "").toUpperCase();
+  if (upper === "CRITICAL") return "Emergency";
+  if (upper === "URGENT" || upper === "SEMI-URGENT") return "Urgent";
+  return "Routine";
+}
+
+/**
+ * Synthea labels look like "Giovanni385 P. (65M, abnormal findings...)".
+ * Drop the parenthetical clinical summary and the trailing digits on
+ * the first name so the queue shows "Giovanni P." instead of the
+ * full Synthea identifier string.
+ */
+function formatSyntheaName(label: string): string {
+  if (!label) return "Synthea patient";
+  const beforeParen = label.split("(")[0]?.trim() ?? label;
+  const cleaned = beforeParen.replace(/(\b[A-Za-z]+)\d+/g, "$1");
+  return cleaned || "Synthea patient";
+}
+
+// ---------------------------------------------------------------------------
 // PAGE
 // ---------------------------------------------------------------------------
 
@@ -414,6 +445,21 @@ export default function TriagePage() {
   // exact narrative the user analysed, not what they're currently typing.
   const [submittedNarrative, setSubmittedNarrative] = useState<string>("");
 
+  // Last-picked Synthea patient (if any) so the front-desk handoff can
+  // attach the synthetic patient's name to the new case.
+  const [pickedSynthea, setPickedSynthea] = useState<SyntheaSelection | null>(
+    null,
+  );
+
+  // Front-desk handoff state. The /triage page is normally a judge-facing
+  // demo, but we let the user "lift" the AI verdict into a real case in
+  // the front-desk queue with one click. See handleSendToFrontDesk.
+  const [handoffState, setHandoffState] = useState<
+    "idle" | "sending" | "sent" | "error"
+  >("idle");
+  const [handoffCaseId, setHandoffCaseId] = useState<string | null>(null);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+
   const canSubmit = useMemo(
     () => symptomText.trim().length >= 12 && !loading,
     [symptomText, loading],
@@ -426,6 +472,10 @@ export default function TriagePage() {
     setCascade(null);
     setCascadeError(null);
     setSubmittedNarrative("");
+    setPickedSynthea(null);
+    setHandoffState("idle");
+    setHandoffCaseId(null);
+    setHandoffError(null);
   };
 
   const handlePickSynthea = (selection: SyntheaSelection) => {
@@ -439,6 +489,10 @@ export default function TriagePage() {
     setCascade(null);
     setCascadeError(null);
     setSubmittedNarrative("");
+    setPickedSynthea(selection);
+    setHandoffState("idle");
+    setHandoffCaseId(null);
+    setHandoffError(null);
   };
 
   const handleAnalyze = async () => {
@@ -450,6 +504,9 @@ export default function TriagePage() {
     setCascade(null);
     setCascadeError(null);
     setSubmittedNarrative(narrativeAtSubmit);
+    setHandoffState("idle");
+    setHandoffCaseId(null);
+    setHandoffError(null);
     try {
       const response = await fetch("/api/ai/analyze-intake", {
         method: "POST",
@@ -506,6 +563,73 @@ export default function TriagePage() {
     }
   };
 
+  // Lift the current AI verdict into a real case row in the front-desk
+  // queue. Mirrors the payload shape that /patient/intake POSTs to
+  // /api/cases/create so the queue and downstream pages render this
+  // case identically to one that came from the production intake form.
+  // If the user picked a Synthea patient we attach that synthetic
+  // identity; otherwise we tag the case as an anonymous walk-in.
+  const handleSendToFrontDesk = async () => {
+    if (!result || handoffState === "sending") return;
+    setHandoffState("sending");
+    setHandoffError(null);
+    setHandoffCaseId(null);
+
+    const synthea = pickedSynthea?.patient;
+    const anonSuffix = Math.floor(Math.random() * 9000 + 1000);
+    const patientName = synthea
+      ? formatSyntheaName(synthea.label)
+      : `Walk-in ${anonSuffix}`;
+
+    const urgencyForCase = mapUrgencyToCaseLevel(result.urgency);
+    const nowIso = new Date().toISOString();
+
+    const payload: Record<string, unknown> = {
+      urgency: urgencyForCase,
+      urgency_reason: result.urgencyReason,
+      recommended_route: result.recommendedRoute,
+      structured_summary: result.summary,
+      risky_flags: result.risks,
+      symptom_text: submittedNarrative || symptomText,
+      duration_text: "as described",
+      severity_hint: "high",
+      source_channel: synthea ? "ai_triage_demo_synthea" : "ai_triage_demo",
+      ai_clinician_brief: result.clinicianBrief,
+      patient_full_name: patientName,
+      patient_age: synthea?.age ?? null,
+      patient_gender: synthea?.sex ?? null,
+      patient_history: synthea
+        ? (synthea.active_conditions ?? []).join("; ")
+        : "",
+      additional_details: synthea
+        ? `Synthetic patient (Synthea ${pickedSynthea?.patient.bucket}). Active meds: ${(synthea.active_medications ?? []).join(", ") || "none"}.`
+        : "Created from /triage demo (no patient identity captured).",
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    try {
+      const r = await fetch("/api/cases/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) {
+        const detail = await r.text();
+        throw new Error(`Case create failed (${r.status}): ${detail.slice(0, 120)}`);
+      }
+      const body = (await r.json()) as { caseId?: string };
+      if (!body.caseId) throw new Error("Case created but no id returned");
+      setHandoffCaseId(body.caseId);
+      setHandoffState("sent");
+    } catch (e) {
+      setHandoffError(
+        e instanceof Error ? e.message : "Case handoff failed.",
+      );
+      setHandoffState("error");
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#F1F5F9] text-slate-900">
       <TopBar
@@ -540,6 +664,23 @@ export default function TriagePage() {
             />
           </section>
         </div>
+
+        {result && !error && (
+          <div className="mt-5">
+            <FrontDeskHandoffBanner
+              urgency={result.urgency}
+              state={handoffState}
+              caseId={handoffCaseId}
+              error={handoffError}
+              syntheaName={
+                pickedSynthea
+                  ? formatSyntheaName(pickedSynthea.patient.label)
+                  : null
+              }
+              onSend={handleSendToFrontDesk}
+            />
+          </div>
+        )}
 
         {result && !error && (
           <CascadeSection
@@ -1793,6 +1934,117 @@ function Chip({
 // ---------------------------------------------------------------------------
 // FOOTER
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// FRONT-DESK HANDOFF BANNER
+// ---------------------------------------------------------------------------
+
+function FrontDeskHandoffBanner({
+  urgency,
+  state,
+  caseId,
+  error,
+  syntheaName,
+  onSend,
+}: {
+  urgency: Urgency;
+  state: "idle" | "sending" | "sent" | "error";
+  caseId: string | null;
+  error: string | null;
+  syntheaName: string | null;
+  onSend: () => void;
+}) {
+  const tone =
+    urgency === "CRITICAL"
+      ? { ring: "border-[#C62828]", chip: "bg-[#C62828] text-white" }
+      : urgency === "URGENT"
+      ? { ring: "border-[#E53935]", chip: "bg-[#E53935] text-white" }
+      : urgency === "SEMI-URGENT"
+      ? { ring: "border-amber-400", chip: "bg-amber-400 text-amber-950" }
+      : { ring: "border-emerald-400", chip: "bg-emerald-500 text-white" };
+
+  if (state === "sent" && caseId) {
+    return (
+      <section
+        className={`rounded-[14px] border bg-white p-5 shadow-[0_2px_4px_rgba(0,0,0,0.04)] ${tone.ring}`}
+        aria-live="polite"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+              Handed off to front desk
+            </div>
+            <div className="mt-0.5 text-[14px] font-semibold text-slate-900">
+              Case <span className="font-mono">{caseId}</span> is now in the queue.
+            </div>
+            <p className="mt-1 text-[12px] leading-snug text-slate-600">
+              The case appears on the front-desk queue and will follow the same
+              triage → nurse → provider path as a real intake.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href="/front-desk/queue"
+              className="rounded-[10px] bg-[#0F4C81] px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0d3f6c]"
+            >
+              Open front-desk queue →
+            </a>
+            <a
+              href={`/patient/status?caseId=${encodeURIComponent(caseId)}&urgency=${encodeURIComponent(urgency.toLowerCase())}`}
+              className="rounded-[10px] border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700 transition hover:border-[#0F4C81] hover:text-[#0F4C81]"
+            >
+              View patient status
+            </a>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className={`rounded-[14px] border bg-white p-5 shadow-[0_2px_4px_rgba(0,0,0,0.04)] ${tone.ring}`}
+      aria-live="polite"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tone.chip}`}
+            >
+              {urgency}
+            </span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              Hand off to front desk
+            </span>
+          </div>
+          <div className="mt-1.5 text-[14px] font-semibold text-slate-900">
+            Create a real case from this AI verdict.
+          </div>
+          <p className="mt-1 max-w-[640px] text-[12px] leading-snug text-slate-600">
+            {syntheaName
+              ? `The case will be filed for ${syntheaName} (synthetic patient) and routed to the front-desk queue.`
+              : "The case will be filed as an anonymous walk-in and routed to the front-desk queue."}{" "}
+            From there it follows the existing triage → nurse → provider workflow.
+          </p>
+          {error ? (
+            <p className="mt-2 rounded-[8px] border border-amber-200 bg-amber-50 px-2 py-1 text-[11.5px] text-amber-900">
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={onSend}
+          disabled={state === "sending"}
+          className="shrink-0 rounded-[10px] bg-[#0F4C81] px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0d3f6c] disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          {state === "sending" ? "Sending…" : "Send to front-desk queue"}
+        </button>
+      </div>
+    </section>
+  );
+}
 
 function DisclaimerFooter() {
   return (

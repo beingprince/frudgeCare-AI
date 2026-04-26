@@ -19,7 +19,7 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight, ArrowLeft, HeartPulse, AlignLeft, Calendar as CalendarIcon,
   Check, Save, Loader2, AlertCircle, User, ClipboardList, Lock, Eye, EyeOff,
@@ -125,6 +125,15 @@ function isValidEmailOptional(raw: string): boolean {
 
 export default function PatientIntake() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Staff-assist mode: when the front desk launches this form on a
+  // walk-in patient's behalf (linked from /front-desk/queue with
+  // ?mode=staff), we skip the password fields and the
+  // /api/patient/register call. The case is created without a
+  // patient_profiles row — same path as anonymous walk-ins, which
+  // /api/cases/create already supports.
+  const isStaffMode = searchParams?.get("mode") === "staff";
 
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
   const [formData, setFormData] = useState<IntakeFormState>(INITIAL_STATE);
@@ -160,8 +169,10 @@ export default function PatientIntake() {
     formData.gender !== "" &&
     phoneIsValid &&
     emailIsValid &&
-    passwordError === null &&
-    formData.password === formData.passwordConfirm &&
+    // Password is only enforced in patient self-service mode. In staff
+    // mode the receptionist is filling this in for someone at the desk
+    // and we don't create a patient account.
+    (isStaffMode || (passwordError === null && formData.password === formData.passwordConfirm)) &&
     formData.chiefComplaint.trim().length > 0;
 
   const handleFinalSubmit = async () => {
@@ -174,33 +185,40 @@ export default function PatientIntake() {
       //    without burning Gemini quota or producing an orphan case.
       //    The response sets fc_session, so the subsequent
       //    /api/cases/create call will auto-bind the case to this profile.
-      const regRes = await fetch("/api/patient/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          full_name: formData.fullName,
-          date_of_birth: formData.dateOfBirth,
-          gender: formData.gender,
-          phone: fullPhoneForApi,
-          phone_country: formData.phoneCountryIso,
-          email: formData.email,
-          password: formData.password,
-        }),
-      });
-      const reg = await regRes.json();
-      if (!regRes.ok || !reg.success) {
-        // 409 (duplicate) returns a friendly message + redirect path.
-        if (regRes.status === 409 && reg.redirect) {
-          setSubmitError(
-            reg.message ||
-              "An account with that contact already exists. Please sign in.",
-          );
-          setIsSubmitting(false);
-          return;
+      //
+      //    Skipped in staff-assist mode: the receptionist is creating the
+      //    case for a walk-in patient and we don't have their password.
+      //    /api/cases/create accepts a null patient_profile_id for this.
+      let patientProfileId: string | null = null;
+      if (!isStaffMode) {
+        const regRes = await fetch("/api/patient/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            full_name: formData.fullName,
+            date_of_birth: formData.dateOfBirth,
+            gender: formData.gender,
+            phone: fullPhoneForApi,
+            phone_country: formData.phoneCountryIso,
+            email: formData.email,
+            password: formData.password,
+          }),
+        });
+        const reg = await regRes.json();
+        if (!regRes.ok || !reg.success) {
+          // 409 (duplicate) returns a friendly message + redirect path.
+          if (regRes.status === 409 && reg.redirect) {
+            setSubmitError(
+              reg.message ||
+                "An account with that contact already exists. Please sign in.",
+            );
+            setIsSubmitting(false);
+            return;
+          }
+          throw new Error(reg.error || "Could not create your account.");
         }
-        throw new Error(reg.error || "Could not create your account.");
+        patientProfileId = reg.patient_profile_id;
       }
-      const patientProfileId: string = reg.patient_profile_id;
 
       // 1) Pre-triage (urgency + clinician brief).
       const aiRes = await fetch("/api/ai/analyze-intake", {
@@ -304,10 +322,20 @@ export default function PatientIntake() {
       if (!caseRes.ok) throw new Error("Failed to create case record");
       const { caseId } = await caseRes.json();
 
-      const tierParam = ai.source_tier ? `&tier=${encodeURIComponent(ai.source_tier)}` : "";
-      router.push(
-        `/patient/status?caseId=${encodeURIComponent(caseId)}&urgency=${encodeURIComponent(ai.urgency)}${tierParam}`
-      );
+      // Where to land after submit:
+      //  • patient self-service → /patient/status (their own dashboard)
+      //  • staff-assist mode    → /front-desk/queue with a query hint so
+      //    the row they just created is highlighted at the top.
+      if (isStaffMode) {
+        router.push(
+          `/front-desk/queue?createdCaseId=${encodeURIComponent(caseId)}`,
+        );
+      } else {
+        const tierParam = ai.source_tier ? `&tier=${encodeURIComponent(ai.source_tier)}` : "";
+        router.push(
+          `/patient/status?caseId=${encodeURIComponent(caseId)}&urgency=${encodeURIComponent(ai.urgency)}${tierParam}`,
+        );
+      }
     } catch (err) {
       console.error("Intake submission error:", err);
       setSubmitError(
@@ -418,11 +446,23 @@ export default function PatientIntake() {
         {currentStep === 1 && (
           <div className="w-full flex flex-col gap-6 animate-in fade-in duration-200">
             <div className="text-center mb-2">
-              <h1 className="text-[24px] font-bold text-slate-900 mb-2">Tell us about your visit</h1>
+              <h1 className="text-[24px] font-bold text-slate-900 mb-2">
+                {isStaffMode ? "Walk-in intake (staff)" : "Tell us about your visit"}
+              </h1>
               <p className="text-slate-600 text-[14px]">
-                Fill this in once. We&apos;ll prepare a brief for the care team on the next step.
+                {isStaffMode
+                  ? "Capture this walk-in patient. No account is created — the case lands directly in the front-desk queue."
+                  : "Fill this in once. We'll prepare a brief for the care team on the next step."}
               </p>
             </div>
+
+            {isStaffMode && (
+              <div className="rounded-[10px] border border-[#0F4C81]/20 bg-[#0F4C81]/5 px-3 py-2 text-[12px] text-[#0F4C81]">
+                <strong className="font-semibold">Staff-assisted intake:</strong>{" "}
+                password is skipped, and the case will be filed without a
+                patient account. You&apos;ll land back on the queue when done.
+              </div>
+            )}
 
             {/* Section 1 — About you */}
             <Section icon={<User className="w-4 h-4 text-[#0F4C81]" />} title="About you">
@@ -543,7 +583,11 @@ export default function PatientIntake() {
               </Field>
             </Section>
 
-            {/* Section 1b — Account password (creates the account on submit) */}
+            {/* Section 1b — Account password (creates the account on submit).
+                Hidden in staff-assist mode: the receptionist isn't creating
+                an account for the patient and shouldn't have to pretend
+                to know their password. */}
+            {!isStaffMode && (
             <Section
               icon={<ShieldCheck className="w-4 h-4 text-[#0F4C81]" />}
               title="Secure your account"
@@ -627,6 +671,7 @@ export default function PatientIntake() {
                 </div>
               </Field>
             </Section>
+            )}
 
             {/* Section 2 — Symptoms */}
             <Section icon={<HeartPulse className="w-4 h-4 text-[#0F4C81]" />} title="Your symptoms">

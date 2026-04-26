@@ -22,7 +22,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Search, SlidersHorizontal, Clock, ArrowRight, Stethoscope, Sparkles, Loader2,
   Inbox, UserX, AlertTriangle, CalendarCheck, ChevronDown, ChevronUp, X,
+  UserPlus,
 } from "lucide-react";
+import Link from "next/link";
 import { Popover, ListItemButton, Checkbox, ListItemText } from "@mui/material";
 import { KPICard, ActionPanel } from "@/components/shared/Cards";
 import { DenseTable, type DenseTableColumn } from "@/components/shared/DenseTable";
@@ -617,6 +619,21 @@ export default function FrontDeskQueue() {
               />
               Unassigned only
             </label>
+
+            {/* Walk-in entry: open the existing /patient/intake form in
+                staff-assist mode so the receptionist can capture vitals
+                + symptoms for someone standing at the desk without
+                forcing the patient to log in. The form already supports
+                this dual-mode use case (see comment at top of
+                /patient/intake/page.tsx). */}
+            <Link
+              href="/patient/intake?mode=staff"
+              className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#0F4C81] px-3 h-[32px] text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#0d3f6c]"
+              title="Capture a walk-in patient through the intake form"
+            >
+              <UserPlus size={14} />
+              New walk-in
+            </Link>
           </div>
 
           {/* Active filter chips */}

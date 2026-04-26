@@ -30,6 +30,72 @@ import { getSession } from '@/lib/auth';
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Whitelist of columns we know exist on `public.cases` (per
+ * supabase/migrations/20240425000000_intake_cases_minimal.sql +
+ * 20240426 patient_profile_id FK). Callers historically over-shared
+ * payload (e.g. the intake form sends `urgency` and `recommended_route`
+ * which Supabase rejects with "column not found"). We filter to this
+ * allowlist before insert and fold any extras into ai_patient_profile
+ * so nothing is silently lost.
+ */
+const CASE_COLUMNS = new Set<string>([
+  'case_code',
+  'patient_id',
+  'submitted_by_user_id',
+  'status',
+  'source_channel',
+  'urgency_suggested',
+  'urgency_final',
+  'urgency_reason',
+  'structured_summary',
+  'risky_flags',
+  'ai_clinician_brief',
+  'symptom_text',
+  'duration_text',
+  'severity_hint',
+  'additional_details',
+  'patient_full_name',
+  'patient_date_of_birth',
+  'patient_age',
+  'patient_gender',
+  'patient_phone',
+  'patient_phone_country',
+  'patient_email',
+  'preferred_timing',
+  'preferred_provider',
+  'patient_history',
+  'ai_patient_profile',
+  'patient_profile_id',
+  'created_at',
+  'updated_at',
+]);
+
+/**
+ * Extras from body that don't map to a column. We fold these into
+ * ai_patient_profile.client_extras so the row keeps a record of
+ * everything the client sent (useful for /patient/status to display
+ * the recommended_route, for example).
+ */
+function partitionForCases(body: Record<string, unknown>): {
+  row: Record<string, unknown>;
+  extras: Record<string, unknown>;
+} {
+  const row: Record<string, unknown> = {};
+  const extras: Record<string, unknown> = {};
+  // Map common-but-misnamed fields.
+  if ('urgency' in body && !('urgency_final' in body)) {
+    row.urgency_final = body.urgency;
+    row.urgency_suggested = body.urgency;
+  }
+  for (const [k, v] of Object.entries(body)) {
+    if (k === 'urgency') continue; // handled above
+    if (CASE_COLUMNS.has(k)) row[k] = v;
+    else extras[k] = v;
+  }
+  return { row, extras };
+}
+
 function generateCaseCode(): string {
   // 6-char alphanumeric suffix, uppercase — matches existing FC-C- format.
   const bytes = new Uint8Array(6);
@@ -67,16 +133,34 @@ export async function POST(req: NextRequest) {
   // resolved the canonical value above.
   delete (body as Record<string, unknown>).patient_profile_id;
 
+  const { row: insertRow, extras } = partitionForCases(body);
+  insertRow.case_code = caseCode;
+  // Drop any client-supplied `id` so we don't fight Postgres' default.
+  delete (insertRow as Record<string, unknown>).id;
+  if (patientProfileId) insertRow.patient_profile_id = patientProfileId;
+
+  // Fold unmapped fields (e.g. recommended_route) into ai_patient_profile
+  // under a client_extras key so the data is preserved without breaking
+  // the schema-strict insert.
+  if (Object.keys(extras).length > 0) {
+    const baseProfile =
+      typeof insertRow.ai_patient_profile === 'object' &&
+      insertRow.ai_patient_profile !== null
+        ? (insertRow.ai_patient_profile as Record<string, unknown>)
+        : {};
+    insertRow.ai_patient_profile = {
+      ...baseProfile,
+      client_extras: {
+        ...(typeof baseProfile.client_extras === 'object' && baseProfile.client_extras !== null
+          ? (baseProfile.client_extras as Record<string, unknown>)
+          : {}),
+        ...extras,
+      },
+    };
+  }
+
   const admin = getSupabaseAdmin();
   if (admin) {
-    const insertRow: Record<string, unknown> = {
-      ...body,
-      case_code: caseCode,
-    };
-    // Drop any client-supplied `id` so we don't fight Postgres' default.
-    delete (insertRow as Record<string, unknown>).id;
-    if (patientProfileId) insertRow.patient_profile_id = patientProfileId;
-
     const { data, error } = await admin
       .from('cases')
       .insert(insertRow)
@@ -95,7 +179,7 @@ export async function POST(req: NextRequest) {
 
   // ── Mock backup option ─────────────────────────────────────────────
   const mockRow = {
-    ...body,
+    ...insertRow,
     id: caseCode,
     case_code: caseCode,
     patient_profile_id: patientProfileId,
