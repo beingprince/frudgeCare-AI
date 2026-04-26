@@ -137,6 +137,24 @@ export default function ProviderDaily() {
   useEffect(() => {
     let cancelled = false;
     const fetchDaily = async () => {
+      // 1) Primary path: cases the nurse has handed off to the provider queue.
+      //    (The old flow only queried `appointments`, which the hackathon
+      //    pipeline does not create — so this list was always empty.)
+      try {
+        const res = await fetch("/api/provider/daily", { cache: "no-store" });
+        if (res.ok) {
+          const body = (await res.json()) as { items?: MockAppointment[]; count?: number };
+          if (!cancelled && body.items && body.items.length > 0) {
+            setAppointments(body.items);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        /* try legacy */
+      }
+
+      // 2) Legacy: real appointment rows (when your Supabase has them)
       if (isSupabaseConfigured()) {
         try {
           const fetchPromise = supabase
@@ -241,8 +259,8 @@ export default function ProviderDaily() {
                 loading
                   ? "Loading…"
                   : scheduled === 0
-                    ? "Nothing booked"
-                    : `${scheduled} appointment${scheduled === 1 ? "" : "s"}, sorted by start time`
+                    ? "No cases in your queue — they appear when triage sends a handoff"
+                    : `${scheduled} case${scheduled === 1 ? "" : "s"} in the provider queue, sorted by time`
               }
             />
 
@@ -255,8 +273,8 @@ export default function ProviderDaily() {
                 <div className="fc-card p-0 overflow-hidden">
                   <EmptyState
                     icon="inbox"
-                    title="No appointments today"
-                    description="Your schedule is clear. New cases will appear here as they're confirmed."
+                    title="No cases in the provider queue"
+                    description="When a nurse completes handoff, the case status becomes “awaiting provider” and shows here. Scheduled visits also appear if your Supabase has appointment rows with status “confirmed”."
                   />
                 </div>
               ) : (
